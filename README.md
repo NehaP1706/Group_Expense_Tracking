@@ -5,17 +5,17 @@ processes, ensuring a fair and hassle-free experience for all group members.
 
 # API Endpoints
 
-1. '/signup' : To fill in user details for registration.
-2. '/login' : To specify user for a session.
-3. '/api/profile/:userId' : To fetch user details, debt, groups and transaction history.
-4. '/api/group/:groupId' : To fetch the various events and activities under a certain group.
-5. '/api/groupsForUser' : To list (as hyperlinks) the various groups a user created or is a part of.
-6. '/api/groups' : To list the groups (on the profile page).
-7. 'api/group/:groupId/addEvent' : To add a new event to a group (specifying details, expenses and people involved).
-8. '/api/transactions' : To handle the transactions.
-9. '/api/uploadReceiptOnly' : To handle the receipts uploaded for review by owedTo and owedBy.
-10. '/api/markTransactionPaid' : To settle payments.
-11. '/api/groups/:groupId/updateMembers' : To update people involved in the group.
+1. ```'/signup'``` : To fill in user details for registration.
+2. ```'/login'``` : To specify user for a session.
+3. ```'/api/profile/:userId'``` : To fetch user details, debt, groups and transaction history.
+4. ```'/api/group/:groupId'``` : To fetch the various events and activities under a certain group.
+5. ```'/api/groupsForUser'``` : To list (as hyperlinks) the various groups a user created or is a part of.
+6. ```'/api/groups'``` : To list the groups (on the profile page).
+7. ```'api/group/:groupId/addEvent'``` : To add a new event to a group (specifying details, expenses and people involved).
+8. ```'/api/transactions'``` : To handle the transactions.
+9. ```'/api/uploadReceiptOnly'``` : To handle the receipts uploaded for review by owedTo and owedBy.
+10. ```'/api/markTransactionPaid'``` : To settle payments.
+11. ```'/api/groups/:groupId/updateMembers'``` : To update people involved in the group.
 
 # How To Run
 
