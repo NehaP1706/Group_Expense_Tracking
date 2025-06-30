@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<head>
+  <title>My Groups</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    .paid { text-decoration: line-through; color: gray; }
+    .group { border: 2px solid #ccc; padding: 15px; margin-bottom: 20px; }
+    .event { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+    a { color: blue; text-decoration: underline; }
+    .mark-paid-btn { margin-left: 10px; padding: 3px 8px; }
+  </style>
+</head>
+<body>
+  <h1>Your Groups</h1>
+  <div id="groupContainer"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('userId');
+    const userCache = {};
+
+    async function getUserName(userId) {
+      if (userCache[userId]) return userCache[userId];
+      try {
+        const res = await fetch(`/api/profile?userId=${userId}`);
+        const user = await res.json();
+        const name = `${user.firstName} ${user.lastName}`;
+        userCache[userId] = name;
+        return name;
+      } catch (err) {
+        console.error("Failed to fetch user:", userId);
+        return userId;
+      }
+    }
+
+    async function makeUserLink(userId) {
+      const name = await getUserName(userId);
+      return `<a href="/profile.html?userId=${userId}">${name}</a>`;
+    }
+
+    async function renderGroups() {
+      try {
+        const res = await fetch(`/api/groupsForUser?userId=${userId}`);
+        const groups = await res.json();
+        const container = document.getElementById('groupContainer');
+        if (groups.length === 0) {
+          container.innerHTML = "<p>No groups found.</p>";
+          return;
+        }
+
+        for (const group of groups) {
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'group';
+
+          const creatorLink = await makeUserLink(group.createdBy);
+
+          let html = `<h2>Group: ${group.groupName}</h2>`;
+          html += `<p><strong>Group ID:</strong> ${group.groupId}</p>`;
+          html += `<p><strong>Created By:</strong> ${creatorLink}</p>`;
+          html += `<p><strong>Members:</strong></p><ul>`;
+
+          for (const memberId of group.members) {
+            const memberLink = await makeUserLink(memberId);
+            html += `<li>${memberLink}</li>`;
+          }
+          html += `</ul>`;
+
+          if (group.events.length > 0) {
+            html += `<h3>Events</h3>`;
+            for (const event of group.events) {
+              html += `<div class="event">
+                <h4>${event.eventName}</h4>
+                <p>${event.description} | ${event.duration}</p>
+                <ul>`;
+              for (const t of event.transactions) {
+                const owedBy = await makeUserLink(t.owedBy);
+                const owedTo = await makeUserLink(t.owedTo);
+
+                const isUserInvolved = t.owedBy === userId || t.owedTo === userId;
+                const isUnpaid = !t.isPaid;
+                const timestampStr = new Date(t.timestamp).toLocaleString();
+
+                html += `<li class="${t.isPaid ? 'paid' : ''}">
+                  ₹${t.amount} owed by ${owedBy} to ${owedTo} for ${t.reason} on ${timestampStr}`;
+
+                if (isUnpaid && isUserInvolved) {
+                  html += ` <button class="mark-paid-btn" onclick="markTransactionAsPaid('${group.groupId}', '${event.eventName}', '${t.timestamp}', '${t.owedBy}', '${t.owedTo}')">Mark as Paid</button>`;
+                }
+
+                html += `</li>`;
+              }
+              html += `</ul></div>`;
+            }
+          }
+
+          // Add Event Form
+          html += `
+            <h3>Add Event</h3>
+            <input id="eventName-${group.groupId}" placeholder="Event Name"><br>
+            <textarea id="description-${group.groupId}" placeholder="Description"></textarea><br>
+            <input id="amount-${group.groupId}" type="number" placeholder="Transaction Amount"><br>
+            <input id="owedBy-${group.groupId}" placeholder="Owed By (user ID)"><br>
+            <input id="owedTo-${group.groupId}" placeholder="Owed To (user ID)"><br>
+            <input id="reason-${group.groupId}" placeholder="Reason"><br>
+            <button onclick="submitEvent('${group.groupId}')">Add Event</button>
+          `;
+
+          html += `</ul>`;
+          groupDiv.innerHTML = html;
+
+          if (group.createdBy === userId) {
+            const button = document.createElement("button");
+            button.textContent = "Add/Remove Members";
+            button.classList.add("mark-paid-btn");
+            button.addEventListener("click", () => editMembers(group.groupId, group.members, userId));
+            groupDiv.appendChild(button);
+          } 
+
+          container.appendChild(groupDiv);
+        }
+      } catch (err) {
+        console.error("Error loading groups:", err);
+        document.getElementById('groupContainer').innerHTML = "<p>Failed to load groups.</p>";
+      }
+    }
+
+    async function submitEvent(groupId) {
+      const eventName = document.getElementById(`eventName-${groupId}`).value;
+      const description = document.getElementById(`description-${groupId}`).value;
+      const amount = parseFloat(document.getElementById(`amount-${groupId}`).value);
+      const owedBy = document.getElementById(`owedBy-${groupId}`).value;
+      const owedTo = document.getElementById(`owedTo-${groupId}`).value;
+      const reason = document.getElementById(`reason-${groupId}`).value;
+
+      const event = {
+        eventName,
+        description,
+        duration: "N/A",
+        createdAt: new Date(),
+        transactions: [{
+          owedBy,
+          owedTo,
+          reason,
+          amount,
+          timestamp: new Date(),
+          isPaid: false
+        }]
+      };
+
+      try {
+        const res = await fetch(`/api/groups/${groupId}/addEvent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ event })
+        });
+
+        if (res.ok) {
+          alert("✅ Event added!");
+          location.reload();
+        } else {
+          alert("❌ Failed to add event.");
+        }
+      } catch (err) {
+        console.error("Submit error:", err);
+        alert("❌ Error while submitting event.");
+      }
+    }
+
+  async function markTransactionAsPaid(groupId, eventName, timestamp, owedBy, owedTo) {
+    const url = `/receipt_upload.html?groupId=${groupId}&eventName=${encodeURIComponent(eventName)}&timestamp=${encodeURIComponent(timestamp)}&owedBy=${owedBy}&owedTo=${owedTo}`;
+    window.open(url, '_blank', 'width=500,height=600');
+  }
+
+  async function editMembers(groupId, currentMembers, userId) {
+    const memberInput = prompt(
+      "Enter comma-separated user IDs to be group members:",
+      currentMembers.join(",")
+    );
+  
+    if (!memberInput) return;
+
+    const newMembers = memberInput
+      .split(",")
+      .map(m => m.trim())
+      .filter(m => m.length > 0);
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/updateMembers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ members: newMembers})
+      });
+
+      if (res.ok) {
+        alert("✅ Group members updated!");
+        location.reload();
+      } else {
+        const data = await res.json();
+        alert("❌ Failed to update members: " + (data.error || data.message));
+      }
+    } catch (err) {
+      console.error("Error updating members:", err);
+      alert("❌ Error while updating members.");
+    }
+  }
+
+    renderGroups();
+  </script>
+</body>
+</html>

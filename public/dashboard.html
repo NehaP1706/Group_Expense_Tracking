@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      color: #333;
+    }
+    .btn {
+      display: block;
+      margin: 1rem 0;
+      padding: 1rem;
+      background-color: #007BFF;
+      color: white;
+      text-align: center;
+      border: none;
+      border-radius: 8px;
+      text-decoration: none;
+      width: 200px;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to Your Dashboard</h1>
+
+  <a id="profileBtn" class="btn">Go to Profile</a>
+  <a id="groupsBtn" class="btn">View Groups</a>
+  <a id="makeGroupBtn" class="btn">Make a Group</a>
+  <script>
+    // Get userId from URL
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("userId");
+
+    if (!userId) {
+      alert("Missing userId. Please log in again.");
+      window.location.href = "/login";
+    }
+
+    // Set button links
+    document.getElementById("profileBtn").addEventListener("click", () => {
+        window.location.href = `profile.html?userId=${userId}`;
+    });
+
+    document.getElementById("groupsBtn").addEventListener("click", () => {
+        window.location.href = `group.html?userId=${userId}`;
+    });
+
+    document.getElementById("makeGroupBtn").addEventListener("click", () => {
+        window.location.href = `make-group.html?userId=${userId}`;
+    });
+
+  </script>
+
+</body>
+</html>

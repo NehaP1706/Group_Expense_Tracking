@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>User Profile</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      padding: 2rem;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .section {
+      margin-bottom: 2rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    ul {
+      list-style: none;
+      padding-left: 1rem;
+    }
+    li {
+      padding: 0.5rem 0;
+    }
+    .paid {
+      text-decoration: line-through;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <h1>User Profile</h1>
+
+  <div class="section">
+    <h2>User Details</h2>
+    <p><strong>User ID:</strong> <span id="userId">-</span></p>
+    <p><strong>First Name:</strong> <span id="firstName">-</span></p>
+    <p><strong>Last Name:</strong> <span id="lastName">-</span></p>
+    <p><strong>Mobile:</strong> <span id="mobile">-</span></p>
+    <p><strong>Currency:</strong> <span id="currency">-</span></p>
+  </div>
+
+  <div class="section">
+    <h2>Debt Summary</h2>
+    <p><strong>Total Owed:</strong> <span id="totalOwed">0</span></p>
+    <button onclick="redirectToGroups()">Settle Debt</button>
+  </div>
+
+  <div class="section">
+    <h2>Your Groups</h2>
+    <ul id="groupList">
+      <li>Loading...</li>
+    </ul>
+  </div>  
+
+  <div class="section">
+    <h2>Transaction History</h2>
+    <ul id="historyList"></ul>
+  </div>
+
+  <div class="section">
+    <ul id="historyList"></ul>
+    <button id="downloadBtn" style="margin-top: 10px;">⬇️ Download History</button>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("userId");
+
+    if (!userId) {
+      alert("Missing userId. Please log in again.");
+      window.location.href = "/login";
+    }
+
+    function redirectToGroups() {
+      window.location.href = `/group.html?userId=${encodeURIComponent(userId)}`;
+    }
+
+    async function loadGroups() {
+      try {
+      const res = await fetch(`/api/groupsForUser?userId=${userId}`);
+      const groups = await res.json();
+      const groupList = document.getElementById("groupList");
+      groupList.innerHTML = ""; // Clear existing
+
+      if (groups.length === 0) {
+        groupList.innerHTML = "<li>No groups found.</li>";
+        return;
+      }
+
+      for (const group of groups) {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = `/group.html?groupId=${group.groupId}&userId=${userId}`;
+        link.textContent = group.groupName;
+        li.appendChild(link);
+        groupList.appendChild(li);
+      }
+      } catch (err) {
+        console.error("Failed to load groups:", err);
+        document.getElementById("groupList").innerHTML = "<li>Error loading groups.</li>";
+      }
+    }
+
+    async function loadProfile() {
+      try {
+        const response = await fetch(`/api/profile?userId=${userId}`);
+        const user = await response.json();
+
+        // Set user info
+        document.getElementById("userId").textContent = user.userId;
+        document.getElementById("firstName").textContent = user.firstName;
+        document.getElementById("lastName").textContent = user.lastName;
+        document.getElementById("mobile").textContent = user.mobile;  
+        document.getElementById("currency").textContent = user.currency;
+        document.getElementById("totalOwed").textContent = `${user.currency}_${user.debt.toFixed(2)}`;
+
+        // Load transaction history
+        const txnRes = await fetch(`/api/transactions?userId=${userId}`);
+        const transactions = await txnRes.json();
+        const historyList = document.getElementById("historyList");
+
+        if (transactions.length === 0) {
+          historyList.innerHTML = "<li>No transactions yet.</li>";
+        } else {
+          for (const txn of transactions) {
+            const li = document.createElement("li");
+            li.className = "paid"; // all are paid
+            li.innerHTML = `
+              <strong>${txn.amount} ${txn.currency || "INR"}</strong> — 
+              ${txn.owedBy} paid ${txn.owedTo} for "${txn.reason}"<br>
+              <em>Settled on: ${new Date(txn.paymentTimestamp).toLocaleString()}</em>
+            `;
+          historyList.appendChild(li);
+        }
+      }
+
+      // Attach CSV download logic once
+      document.getElementById("downloadBtn").addEventListener("click", () => {
+      if (!transactions || transactions.length === 0) {
+        alert("No transactions to download.");
+        return;
+      }
+
+      const headers = ["Amount", "Currency", "Owed By", "Owed To", "Reason", "Payment Timestamp"];
+      const csvRows = [headers.join(",")];
+
+      for (const txn of transactions) {
+        const row = [
+          txn.amount,
+          txn.currency || "INR",
+          txn.owedBy,
+          txn.owedTo,
+          `"${txn.reason.replace(/"/g, '""')}"`,
+          new Date(txn.paymentTimestamp).toISOString()
+        ];
+        csvRows.push(row.join(","));
+      }
+
+      const csvContent = csvRows.join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `transactions_${userId}.csv`;
+      a.click();
+
+      URL.revokeObjectURL(url);
+    });
+      
+      } catch (err) {
+        console.error(err);
+        alert("Error loading profile data.");
+      }
+    }
+
+    loadProfile();
+    loadGroups();
+  </script>
+</body>
+</html>

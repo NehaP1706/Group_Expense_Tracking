@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Create Group</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 2rem;
+      background: #f0f2f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .section {
+      margin-bottom: 1.5rem;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 0.5rem;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.3rem;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.8rem;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Create New Group</h1>
+
+  <div class="section">
+    <label>Group Name</label>
+    <input type="text" id="groupName" required />
+
+    <label>Duration</label>
+    <input type="text" id="duration" placeholder="e.g. 3 days, 1 week" />
+
+    <label>Members (comma-separated user IDs)</label>
+    <input type="text" id="members" />
+  </div>
+
+  <div class="section">
+    <h3>Initial Event</h3>
+    <label>Event Name</label>
+    <input type="text" id="eventName" />
+
+    <label>Description</label>
+    <textarea id="eventDescription"></textarea>
+
+    <label>Transaction Amount</label>
+    <input type="number" id="amount" />
+
+    <label>Owed By (user ID)</label>
+    <input type="text" id="owedBy" />
+
+    <label>Owed To (user ID)</label>
+    <input type="text" id="owedTo" />
+
+    <label>Reason</label>
+    <input type="text" id="reason" />
+  </div>
+
+  <button onclick="submitGroup()">Create Group</button>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("userId");
+
+    async function submitGroup() {
+      const groupData = {
+        createdBy: userId,
+        groupName: document.getElementById("groupName").value,
+        duration: document.getElementById("duration").value,
+        members: document.getElementById("members").value.split(",").map(x => x.trim()),
+        events: [
+          {
+            eventName: document.getElementById("eventName").value,
+            description: document.getElementById("eventDescription").value,
+            duration: document.getElementById("duration").value,
+            transactions: [
+              {
+                amount: parseFloat(document.getElementById("amount").value),
+                owedBy: document.getElementById("owedBy").value,
+                owedTo: document.getElementById("owedTo").value,
+                reason: document.getElementById("reason").value,
+                timestamp: new Date().toISOString(),
+                isPaid: false
+              }
+            ]
+          }
+        ]
+      };
+
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(groupData)
+      });
+
+      if (res.ok) {
+        alert("Group created!");
+        window.location.href = `dashboard.html?userId=${userId}`;
+      } else {
+        alert("Failed to create group.");
+      }
+    }
+  </script>
+</body>
+</html>
