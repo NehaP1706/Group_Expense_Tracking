@@ -26,3 +26,12 @@ Then, run the command:
 ``` node server.js  ```
 
 Open a web browser and access  ``` http://localhost:3000/login ``` or ``` httpe://localhost:3000/signup ```
+
+# Further Improvements (Thinking Ahead)
+
+1. Verify receipts uploaded for relevance.
+2. Integrate payment gateway UPIs to settle payments in the app.
+3. Apply currency conversions during transactions.
+4. Add CSS styles for aesthetic.
+5. Allow profile picture and event/Group pictures for presentability.
+6. Allow drop-downs instead of typing userIds while creating groups or editin members.
