@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Receipt</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 2rem;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 500px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        .info-box {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1.5rem;
+        }
+        .info-box p {
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+        .info-box strong {
+            color: #667eea;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 600;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button {
+            width: 100%;
+            padding: 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📄 Upload Receipt</h2>
+        
+        <div class="info-box" id="transactionInfo">
+            <p><strong>Group:</strong> <span id="groupName"></span></p>
+            <p><strong>Event:</strong> <span id="eventName"></span></p>
+            <p><strong>From:</strong> <span id="owedBy"></span></p>
+            <p><strong>To:</strong> <span id="owedTo"></span></p>
+        </div>
+
+        <div class="form-group">
+            <label for="receipt">Select Receipt File</label>
+            <input type="file" id="receipt" accept="image/*,.pdf">
+        </div>
+
+        <button onclick="uploadReceipt()" id="uploadBtn">Upload & Mark as Paid</button>
+        
+        <div class="loading" id="loading">
+            <p>Uploading... Please wait.</p>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const groupName = params.get("groupName");
+        const createdBy = params.get("createdBy");
+        const eventName = params.get("eventName");
+        const timestamp = params.get("timestamp");
+        const owedBy = params.get("owedBy");
+        const owedTo = params.get("owedTo");
+
+        // Display transaction info
+        document.getElementById("groupName").textContent = groupName;
+        document.getElementById("eventName").textContent = eventName;
+        
+        // Fetch user names
+        const userCache = {};
+        
+        async function getUserName(username) {
+            if (userCache[username]) return userCache[username];
+            try {
+                const res = await fetch(`/api/profile?userId=${username}`);
+                const user = await res.json();
+                const name = `${user.first_name} ${user.last_name}`;
+                userCache[username] = name;
+                return name;
+            } catch (err) {
+                console.error("Failed to fetch user:", username);
+                return username;
+            }
+        }
+
+        async function displayTransactionInfo() {
+            const owedByName = await getUserName(owedBy);
+            const owedToName = await getUserName(owedTo);
+            
+            document.getElementById("owedBy").textContent = `${owedByName} (${owedBy})`;
+            document.getElementById("owedTo").textContent = `${owedToName} (${owedTo})`;
+        }
+
+        displayTransactionInfo();
+
+        async function uploadReceipt() {
+            const fileInput = document.getElementById('receipt');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Please select a file.");
+                return;
+            }
+
+            const uploadBtn = document.getElementById('uploadBtn');
+            const loading = document.getElementById('loading');
+            
+            uploadBtn.disabled = true;
+            loading.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('groupName', groupName);
+            formData.append('createdBy', createdBy);
+            formData.append('eventName', eventName);
+            formData.append('timestamp', timestamp);
+            formData.append('owedBy', owedBy);
+            formData.append('owedTo', owedTo);
+            formData.append('receipt', file);
+
+            try {
+                // Step 1: Upload receipt
+                const uploadRes = await fetch('/api/uploadReceiptOnly', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const uploadData = await uploadRes.json();
+                if (!uploadRes.ok) {
+                    alert("❌ Upload failed: " + (uploadData.error || uploadData.message));
+                    uploadBtn.disabled = false;
+                    loading.style.display = 'none';
+                    return;
+                }
+
+                // Step 2: Mark transaction as paid
+                const markRes = await fetch('/api/markTransactionPaid', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupName, createdBy, eventName, timestamp, owedBy, owedTo })
+                });
+
+                const markData = await markRes.json();
+                if (markRes.ok) {
+                    alert("✅ Receipt uploaded and transaction marked as paid!");
+                    window.close();
+                } else {
+                    alert("❌ Mark failed: " + (markData.error || markData.message));
+                    uploadBtn.disabled = false;
+                    loading.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Error:", err);
+                alert("❌ Error while uploading or marking transaction.");
+                uploadBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

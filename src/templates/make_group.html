@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Group - Expense Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 600;
+        }
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        button {
+            width: 100%;
+            padding: 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .help-text {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>➕ Create New Group</h1>
+        <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Group Details</h2>
+            <div class="form-group">
+                <label for="groupName">Group Name</label>
+                <input type="text" id="groupName" placeholder="e.g., Trip to Goa" required>
+            </div>
+
+            <div class="form-group">
+                <label for="duration">Duration (Optional)</label>
+                <input type="text" id="duration" placeholder="e.g., 3 days, 1 week">
+            </div>
+
+            <div class="form-group">
+                <label for="members">Members (Usernames)</label>
+                <input type="text" id="members" placeholder="e.g. naresha, shwetha_p">
+                <p class="help-text">Enter the <strong>usernames</strong> of members you want to add.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Initial Event (Optional)</h2>
+            <div class="form-group">
+                <label for="eventName">Event Name</label>
+                <input type="text" id="eventName" placeholder="e.g., Hotel Booking">
+            </div>
+
+            <div class="form-group">
+                <label for="eventDescription">Description</label>
+                <textarea id="eventDescription" placeholder="Event details"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="amount">Transaction Amount</label>
+                <input type="number" step="0.01" id="amount" placeholder="0.00">
+            </div>
+
+            <div class="form-group">
+                <label for="owedBy">Owed By (User ID)</label>
+                <input type="text" id="owedBy" placeholder="User ID of person who owes">
+            </div>
+
+            <div class="form-group">
+                <label for="owedTo">Owed To (User ID)</label>
+                <input type="text" id="owedTo" placeholder="User ID of person who paid">
+            </div>
+
+            <div class="form-group">
+                <label for="reason">Reason</label>
+                <input type="text" id="reason" placeholder="e.g., Hotel payment">
+            </div>
+        </div>
+
+        <button onclick="submitGroup()">Create Group</button>
+    </div>
+
+    <script>
+        const userId = "{{ userId }}";
+
+        async function submitGroup() {
+            const groupData = {
+                createdBy: userId,
+                groupName: document.getElementById("groupName").value,
+                duration: document.getElementById("duration").value,
+                members: document.getElementById("members").value.split(",").map(x => x.trim()).filter(x => x),
+                events: []
+            };
+
+            // Add initial event if provided
+            const eventName = document.getElementById("eventName").value;
+            if (eventName) {
+                groupData.events.push({
+                    eventName: eventName,
+                    description: document.getElementById("eventDescription").value,
+                    duration: document.getElementById("duration").value,
+                    transactions: [{
+                        amount: parseFloat(document.getElementById("amount").value) || 0,
+                        owedBy: document.getElementById("owedBy").value,
+                        owedTo: document.getElementById("owedTo").value,
+                        reason: document.getElementById("reason").value,
+                        timestamp: new Date().toISOString(),
+                        isPaid: false
+                    }]
+                });
+            }
+
+            try {
+                const res = await fetch("/api/groups", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(groupData)
+                });
+
+                // Parse the JSON response
+                const result = await res.json();
+
+                if (res.ok) {
+                    alert("✅ Group created!");
+                    window.location.href = `/dashboard?userId=${userId}`;
+                } else {
+                    // Show the specific error from the server (e.g., "User 'xyz' does not exist")
+                    alert("❌ " + (result.error || "Failed to create group."));
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Network or Server Error.");
+            }
+        }
+    </script>
+    {% include "chatbot_widget.html" %}
+</body>
+</html>

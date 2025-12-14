@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - Expense Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        .info-item {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .info-item label {
+            display: block;
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+        .info-item strong {
+            color: #333;
+            font-size: 1.1rem;
+        }
+        .groups-list {
+            list-style: none;
+        }
+        .groups-list li {
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 0.5rem;
+        }
+        .groups-list a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .transaction-item {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-left: 4px solid #28a745;
+            border-radius: 5px;
+            margin-bottom: 0.75rem;
+        }
+        .transaction-item.paid {
+            opacity: 0.7;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>👤 User Profile</h1>
+        <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <h2>Personal Information</h2>
+            <div class="info-grid"> <div class="info-item">
+                    <label>Username</label>
+                    <strong>{{ user.username }}</strong>
+                </div>
+                <div class="info-item">
+                    <label>Name</label>
+                    <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+                </div>
+                <div class="info-item">
+                    <label>Mobile</label>
+                    <strong>{{ user.mobile }}</strong>
+                </div>
+                <div class="info-item">
+                    <label>Currency</label>
+                    <strong>{{ user.currency }}</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Debt Summary</h2>
+            <div class="info-item">
+                <label>Total Outstanding Debt</label>
+                <strong style="color: {% if user.debt > 0 %}#e74c3c{% else %}#28a745{% endif %}">
+                    {{ user.currency }} {{ user.debt }}
+                </strong>
+            </div>
+            <button onclick="window.location.href='/groups?userId={{ userId }}'">
+                View Groups to Settle
+            </button>
+        </div>
+
+        <div class="card">
+            <h2>Your Groups</h2>
+            {% if groups %}
+            <ul class="groups-list">
+                {% for group in groups %}
+                <li>
+                    <a href="/groups?userId={{ userId }}">{{ group.group_name }}</a>
+                    <span style="color: #666; font-size: 0.9rem;">
+                        (Created by {{ group.creator_first_name }} {{ group.creator_last_name }})
+                    </span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state">
+                <p>You haven't joined any groups yet.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>Transaction History</h2>
+            {% if transactions %}
+            <div>
+                {% for txn in transactions %}
+                <div class="transaction-item paid">
+                    <strong>{{ txn.currency }} {{ txn.amount }}</strong> — 
+                    {{ txn.owed_by }} paid {{ txn.owed_to }} for "{{ txn.reason }}"
+                    <br>
+                    <em style="color: #666; font-size: 0.9rem;">
+                        Settled on: {{ txn.payment_timestamp.strftime('%Y-%m-%d %H:%M') }}
+                    </em>
+                </div>
+                {% endfor %}
+            </div>
+            <button onclick="downloadTransactions()">⬇️ Download History (CSV)</button>
+            {% else %}
+            <div class="empty-state">
+                <p>No transaction history yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        async function downloadTransactions() {
+            const userId = "{{ userId }}";
+            const response = await fetch(`/api/transactions?userId=${userId}`);
+            const transactions = await response.json();
+            
+            if (!transactions || transactions.length === 0) {
+                alert("No transactions to download.");
+                return;
+            }
+
+            const headers = ["Amount", "Currency", "Owed By", "Owed To", "Reason", "Payment Timestamp"];
+            const csvRows = [headers.join(",")];
+
+            transactions.forEach(txn => {
+                const row = [
+                    txn.amount,
+                    txn.currency || "INR",
+                    txn.owed_by,
+                    txn.owed_to,
+                    `"${txn.reason.replace(/"/g, '""')}"`,
+                    new Date(txn.payment_timestamp).toISOString()
+                ];
+                csvRows.push(row.join(","));
+            });
+
+            const csvContent = csvRows.join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `transactions_${userId}.csv`;
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+    </script>
+    {% include "chatbot_widget.html" %}
+</body>
+</html>
