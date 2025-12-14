@@ -23,7 +23,7 @@ cat src/schema.sql | docker exec -i $CONTAINER_NAME mysql -u$USER -p$PASSWORD ex
 ```
 
 ## Environment Variable Configs:
-Make a `.env` file with the necessary psskeys as below:
+Make a `.env` file with the necessary passkeys as below:
 
 ```c
 MYSQL_HOST=127.0.0.1
