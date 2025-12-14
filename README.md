@@ -6,20 +6,20 @@ I have used MySql for the current project, therefore it is recommended to create
 ```bash
 docker run -d \
   --name $CONTAINER_NAME \
-  -e MYSQL_ROOT_PASSWORD=$DB_ROOT_PASS \
+  -e MYSQL_ROOT_PASSWORD=$ROOT_PASS \
   -p 3306:3306 \
   mysql:8.0
 ```
 ```
 docker exec -i $CONTAINER_NAME mysql -uroot -p$DB_ROOT_PASS <<EOF
-CREATE DATABASE IF NOT EXISTS $DB_NAME;
-CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';
-GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'%';
+CREATE DATABASE IF NOT EXISTS expense_tracker;
+CREATE USER IF NOT EXISTS '$USER'@'%' IDENTIFIED BY '$PASSWORD';
+GRANT ALL PRIVILEGES ON expense_tracker.* TO '$USER'@'%';
 FLUSH PRIVILEGES;
 EOF
 ```
 ```
-cat src/schema.sql | docker exec -i $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASS $DB_NAME
+cat src/schema.sql | docker exec -i $CONTAINER_NAME mysql -u$USER -p$PASSWORD expense_tracker
 ```
 
 ## Environment Variable Configs:
