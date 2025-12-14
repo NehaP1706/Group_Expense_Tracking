@@ -9,14 +9,16 @@ docker run -d \
   -e MYSQL_ROOT_PASSWORD=$DB_ROOT_PASS \
   -p 3306:3306 \
   mysql:8.0
-
+```
+```
 docker exec -i $CONTAINER_NAME mysql -uroot -p$DB_ROOT_PASS <<EOF
 CREATE DATABASE IF NOT EXISTS $DB_NAME;
 CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'%';
 FLUSH PRIVILEGES;
 EOF
-
+```
+```
 cat src/schema.sql | docker exec -i $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASS $DB_NAME
 ```
 
