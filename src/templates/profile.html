@@ -117,7 +117,8 @@
     <div class="container">
         <div class="card">
             <h2>Personal Information</h2>
-            <div class="info-grid"> <div class="info-item">
+            <div class="info-grid">
+                <div class="info-item">
                     <label>Username</label>
                     <strong>{{ user.username }}</strong>
                 </div>
@@ -147,6 +148,13 @@
             <button onclick="window.location.href='/groups?userId={{ userId }}'">
                 View Groups to Settle
             </button>
+        </div>
+
+        <div class="card">
+            <h2>✈️ Your Trips</h2>
+            <div id="tripsList">
+                <p style="color: #666; text-align: center; padding: 2rem;">Loading trips...</p>
+            </div>
         </div>
 
         <div class="card">
@@ -194,6 +202,54 @@
     </div>
 
     <script>
+        const userId = "{{ userId }}";
+
+        // Load trips when page loads
+        async function loadTrips() {
+            try {
+                const response = await fetch(`/api/trips?userId=${userId}`);
+                const trips = await response.json();
+                
+                const tripsList = document.getElementById('tripsList');
+                
+                if (!trips || trips.length === 0) {
+                    tripsList.innerHTML = '<div class="empty-state"><p>No trips yet. Create your first trip!</p></div>';
+                    return;
+                }
+
+                tripsList.innerHTML = trips.map(trip => {
+                    const isSolo = !trip.group_name;
+                    const destCount = trip.destinations ? trip.destinations.length : 0;
+                    const totalCost = trip.optimal_pathway?.total_cost;
+                    
+                    return `
+                        <div style="background: #f8f9fa; padding: 1rem; border-radius: 5px; margin-bottom: 0.75rem; cursor: pointer;" onclick="window.location.href='/trip/${trip.trip_id}?userId=${userId}'">
+                            <div style="display: flex; justify-content: space-between; align-items: start;">
+                                <div>
+                                    <h4 style="color: #667eea; margin-bottom: 0.5rem;">${trip.trip_name}</h4>
+                                    <p style="color: #666; font-size: 0.9rem;">
+                                        ${isSolo ? '👤 Solo Trip' : '👥 Group Trip: ' + trip.group_name}
+                                        • ${destCount} destination${destCount !== 1 ? 's' : ''}
+                                        • ${trip.travel_class.charAt(0).toUpperCase() + trip.travel_class.slice(1)} class
+                                    </p>
+                                    ${totalCost ? `<p style="color: #28a745; font-weight: 600; margin-top: 0.5rem;">💰 ${totalCost.toFixed(2)}</p>` : ''}
+                                </div>
+                                <div style="background: #667eea; color: white; padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.8rem;">
+                                    View Details →
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error('Error loading trips:', err);
+                document.getElementById('tripsList').innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Error loading trips</p></div>';
+            }
+        }
+
+        // Load trips on page load
+        loadTrips();
+
         async function downloadTransactions() {
             const userId = "{{ userId }}";
             const response = await fetch(`/api/transactions?userId=${userId}`);
@@ -231,6 +287,5 @@
             URL.revokeObjectURL(url);
         }
     </script>
-    {% include "chatbot_widget.html" %}
 </body>
 </html>

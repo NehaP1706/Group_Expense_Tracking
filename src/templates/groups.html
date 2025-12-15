@@ -139,14 +139,12 @@
     <div class="container">
         {% if groups %}
             {% for group in groups %}
-            {% set safe_id = group.group_name.replace(" ", "_") %}
-            
             <div class="group">
                 <h2>{{ group.group_name }}</h2>
                 
                 <div class="group-info">
-                    <p><strong>Group Name:</strong> {{ group.group_name }}</p>
-                    <p><strong>Created By:</strong> {{ group.creator_first_name }} {{ group.creator_last_name }} ({{ group.created_by }})</p>
+                    <p><strong>Group ID:</strong> {{ group.group_id }}</p>
+                    <p><strong>Created By:</strong> {{ group.creator_first_name }} {{ group.creator_last_name }}</p>
                     {% if group.duration %}
                     <p><strong>Duration:</strong> {{ group.duration }}</p>
                     {% endif %}
@@ -181,7 +179,7 @@
                             </em>
                             
                             {% if not txn.is_paid and (txn.owed_by == userId or txn.owed_to == userId) %}
-                            <button onclick="markAsPaid('{{ group.group_name }}', '{{ event.event_name }}', '{{ txn.timestamp }}', '{{ txn.owed_by }}', '{{ txn.owed_to }}')">
+                            <button onclick="markAsPaid('{{ group.group_id }}', '{{ event.event_name }}', '{{ txn.timestamp }}', '{{ txn.owed_by }}', '{{ txn.owed_to }}')">
                                 Mark as Paid
                             </button>
                             {% endif %}
@@ -195,41 +193,37 @@
 
                 <div class="add-event-form">
                     <h3>Add New Event</h3>
-                    <form onsubmit="submitEvent(event, '{{ group.group_name }}', '{{ safe_id }}', '{{ userId }}')">
+                    <form onsubmit="submitEvent(event, '{{ group.group_id }}')">
                         <div class="form-group">
                             <label>Event Name</label>
-                            <input type="text" id="eventName-{{ safe_id }}" required>
+                            <input type="text" id="eventName-{{ group.group_id }}" required>
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <textarea id="description-{{ safe_id }}"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Duration</label>
-                            <input type="text" id="duration-{{ safe_id }}" placeholder="e.g., 2 hours">
+                            <textarea id="description-{{ group.group_id }}"></textarea>
                         </div>
                         <div class="form-group">
                             <label>Amount</label>
-                            <input type="number" step="0.01" id="amount-{{ safe_id }}" required>
+                            <input type="number" step="0.01" id="amount-{{ group.group_id }}" required>
                         </div>
                         <div class="form-group">
-                            <label>Owed By (Username)</label>
-                            <input type="text" id="owedBy-{{ safe_id }}" required>
+                            <label>Owed By (User ID)</label>
+                            <input type="text" id="owedBy-{{ group.group_id }}" required>
                         </div>
                         <div class="form-group">
-                            <label>Owed To (Username)</label>
-                            <input type="text" id="owedTo-{{ safe_id }}" required>
+                            <label>Owed To (User ID)</label>
+                            <input type="text" id="owedTo-{{ group.group_id }}" required>
                         </div>
                         <div class="form-group">
                             <label>Reason</label>
-                            <input type="text" id="reason-{{ safe_id }}" required>
+                            <input type="text" id="reason-{{ group.group_id }}" required>
                         </div>
                         <button type="submit">Add Event</button>
                     </form>
                 </div>
 
                 {% if group.created_by == userId %}
-                <button onclick="editMembers('{{ group.group_name }}', '{{ group.created_by }}', '{{ group.members|map(attribute='username')|join(',') }}')">
+                <button onclick="editMembers('{{ group.group_id }}', '{{ group.members|map(attribute='user_id')|join(',') }}')">
                     Edit Members
                 </button>
                 {% endif %}
@@ -247,43 +241,35 @@
     </div>
 
     <script>
-        async function submitEvent(e, groupName, safeId, currentUser) {
+        async function submitEvent(e, groupId) {
             e.preventDefault();
             
-            const el = document.getElementById(`eventName-${safeId}`);
-            if (!el) {
-                alert(`Error: Could not find form inputs for ID: eventName-${safeId}`);
-                return;
-            }
-
             const event = {
-                eventName: document.getElementById(`eventName-${safeId}`).value,
-                description: document.getElementById(`description-${safeId}`).value,
-                duration: document.getElementById(`duration-${safeId}`) ? document.getElementById(`duration-${safeId}`).value : "N/A",
+                eventName: document.getElementById(`eventName-${groupId}`).value,
+                description: document.getElementById(`description-${groupId}`).value,
+                duration: "N/A",
                 transactions: [{
-                    owedBy: document.getElementById(`owedBy-${safeId}`).value,
-                    owedTo: document.getElementById(`owedTo-${safeId}`).value,
-                    reason: document.getElementById(`reason-${safeId}`).value,
-                    amount: parseFloat(document.getElementById(`amount-${safeId}`).value),
+                    owedBy: document.getElementById(`owedBy-${groupId}`).value,
+                    owedTo: document.getElementById(`owedTo-${groupId}`).value,
+                    reason: document.getElementById(`reason-${groupId}`).value,
+                    amount: parseFloat(document.getElementById(`amount-${groupId}`).value),
                     timestamp: new Date().toISOString(),
                     isPaid: false
                 }]
             };
 
             try {
-                const res = await fetch(`/api/groups/addEvent`, {
+                const res = await fetch(`/api/groups/${groupId}/addEvent`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ groupName, createdBy: currentUser, event })
+                    body: JSON.stringify({ event })
                 });
-
-                const result = await res.json(); 
 
                 if (res.ok) {
                     alert("✅ Event added!");
                     location.reload();
                 } else {
-                    alert("❌ " + (result.error || "Failed to add event."));
+                    alert("❌ Failed to add event.");
                 }
             } catch (err) {
                 console.error(err);
@@ -291,26 +277,22 @@
             }
         }
 
-        async function markAsPaid(groupName, eventName, timestamp, owedBy, owedTo) {
-            const url = `/receipt_upload?groupName=${encodeURIComponent(groupName)}&eventName=${encodeURIComponent(eventName)}&timestamp=${encodeURIComponent(timestamp)}&owedBy=${owedBy}&owedTo=${owedTo}`;
+        async function markAsPaid(groupId, eventName, timestamp, owedBy, owedTo) {
+            const url = `/receipt_upload?groupId=${groupId}&eventName=${encodeURIComponent(eventName)}&timestamp=${encodeURIComponent(timestamp)}&owedBy=${owedBy}&owedTo=${owedTo}`;
             window.open(url, '_blank', 'width=500,height=600');
         }
 
-        async function editMembers(groupName, createdBy, currentMembers) {
-            const memberInput = prompt("Enter comma-separated usernames:", currentMembers);
+        async function editMembers(groupId, currentMembers) {
+            const memberInput = prompt("Enter comma-separated user IDs:", currentMembers);
             if (!memberInput) return;
 
             const newMembers = memberInput.split(",").map(m => m.trim()).filter(m => m.length > 0);
 
             try {
-                const res = await fetch(`/api/groups/updateMembers`, {
+                const res = await fetch(`/api/groups/${groupId}/updateMembers`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        groupName: groupName,
-                        createdBy: createdBy,
-                        members: newMembers 
-                    })
+                    body: JSON.stringify({ members: newMembers })
                 });
 
                 if (res.ok) {
@@ -325,6 +307,5 @@
             }
         }
     </script>
-    {% include "chatbot_widget.html" %}
 </body>
 </html>

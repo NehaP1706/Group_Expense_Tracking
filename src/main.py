@@ -4,16 +4,17 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import uuid4
 from datetime import datetime
 import os
 from pathlib import Path
-
+from .trip_planner import TripPlanner
+import json
 from .db import connect_to_db, get_db, Cur
 from .config import get_config
 from . import queries
-from .chatbot.router import router as chatbot_router  # NEW
+from .chatbot.router import router as chatbot_router 
 
 
 @asynccontextmanager
@@ -31,14 +32,15 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # Create directories if they don't exist
 os.makedirs("uploads", exist_ok=True)
-os.makedirs(str(BASE_DIR / "static"), exist_ok=True)  # NEW
+os.makedirs(str(BASE_DIR / "static"), exist_ok=True)  
 
 # Mount static files and uploads
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), "static")  # NEW
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), "static")  
 app.mount("/uploads", StaticFiles(directory="uploads"), "uploads")
 
 # Include chatbot router
-app.include_router(chatbot_router)  # NEW
+app.include_router(chatbot_router)  
+trip_planner = TripPlanner(aviation_api_key="89c8982a15561c1791b509b85a4a9c6b")
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -459,6 +461,227 @@ async def receipt_upload_page(
             "timestamp": timestamp,
             "owedBy": owedBy,
             "owedTo": owedTo
+        }
+    )
+
+@app.get("/plan-solo-trip", response_class=HTMLResponse)
+async def plan_solo_trip_page(req: Request, userId: str):
+    return templates.TemplateResponse(
+        req, "plan_trip.html", 
+        {"userId": userId, "isSolo": True, "groupName": None, "google_maps_key": get_config().google_maps_api_key}
+    )
+
+
+@app.get("/plan-group-trip", response_class=HTMLResponse)
+async def plan_group_trip_page(req: Request, userId: str, groupName: str):
+    return templates.TemplateResponse(
+        req, "plan_trip.html",
+        {"userId": userId, "isSolo": False, "groupName": groupName, "google_maps_key": get_config().google_maps_api_key}
+    )
+
+
+@app.post("/api/trips/create")
+async def create_trip(req: Request, cur: Annotated[Cur, Depends(get_db)]):
+    """
+    Create a trip with destinations and calculate optimal route
+    """
+    data = await req.json()
+    
+    trip_name = data.get("tripName")
+    group_name = data.get("groupName")  # None for solo trips
+    created_by = data.get("createdBy")
+    travel_class = data.get("travelClass", "economy")
+    destinations = data.get("destinations", [])
+    
+    if not trip_name or not created_by or len(destinations) < 2:
+        return JSONResponse(
+            {"error": "Trip name, creator, and at least 2 destinations required"}, 
+            status_code=400
+        )
+    
+    try:
+        # 1. Create trip
+        await cur.execute(
+            queries.CREATE_TRIP,
+            (trip_name, group_name, created_by, travel_class)
+        )
+        trip_id = cur.lastrowid
+        
+        # 2. Add destinations
+        destination_ids = []
+        for idx, dest in enumerate(destinations):
+            await cur.execute(
+                queries.ADD_DESTINATION,
+                (
+                    trip_id,
+                    dest["city"],
+                    dest["country"],
+                    dest.get("airportCode"),
+                    dest.get("latitude"),
+                    dest.get("longitude"),
+                    idx + 1,
+                    dest.get("arrivalDate"),
+                    dest.get("departureDate")
+                )
+            )
+            destination_ids.append(cur.lastrowid)
+        
+        # 3. Check if dates are provided
+        has_dates = any(d.get("arrivalDate") for d in destinations)
+        
+        # 4. Get flight costs
+        cost_matrix = await trip_planner.get_flight_costs(destinations, travel_class)
+        
+        # 5. Calculate optimal path
+        trip_plan = trip_planner.calculate_trip_plan(destinations, cost_matrix, has_dates)
+        
+        # 6. Save routes
+        if trip_plan.get("optimal_path"):
+            optimal_path = trip_plan["optimal_path"]
+            for i in range(len(optimal_path) - 1):
+                from_idx = optimal_path[i]
+                to_idx = optimal_path[i + 1]
+                cost = cost_matrix[from_idx][to_idx]
+                
+                await cur.execute(
+                    queries.ADD_ROUTE,
+                    (
+                        trip_id,
+                        destination_ids[from_idx],
+                        destination_ids[to_idx],
+                        cost if cost != float('inf') else None,
+                        None,  # airline
+                        None,  # flight_number
+                        None,  # departure_time
+                        None   # arrival_time
+                    )
+                )
+        
+        # 7. Save pathway calculation
+        if trip_plan.get("optimal_path"):
+            await cur.execute(
+                queries.SAVE_PATHWAY,
+                (
+                    trip_id,
+                    json.dumps(trip_plan["optimal_path"]),
+                    trip_plan.get("total_cost"),
+                    trip_plan.get("num_ways", 1),
+                    True  # is_optimal
+                )
+            )
+        
+        await cur._connection.commit()
+        
+        return JSONResponse({
+            "success": True,
+            "trip_id": trip_id,
+            "trip_plan": trip_plan
+        })
+        
+    except Exception as e:
+        await cur._connection.rollback()
+        print(f"Error creating trip: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/trips")
+async def get_trips(userId: str, groupName: Optional[str] = None, 
+                   cur: Annotated[Cur, Depends(get_db)] = None):
+    """
+    Get trips for a user or group
+    """
+    try:
+        if groupName:
+            await cur.execute(queries.GET_TRIPS_FOR_GROUP, (groupName,))
+        else:
+            await cur.execute(queries.GET_TRIPS_FOR_USER, (userId, userId))
+        
+        trips = await cur.fetchall()
+        
+        # Get destinations for each trip
+        result = []
+        for trip in trips:
+            trip_dict = dict(trip)
+            trip_dict["created_at"] = trip_dict["created_at"].isoformat()
+            
+            # Get destinations
+            await cur.execute(queries.GET_DESTINATIONS_FOR_TRIP, (trip["trip_id"],))
+            destinations = await cur.fetchall()
+            trip_dict["destinations"] = [
+                {
+                    **dict(d),
+                    # Convert Decimal to float
+                    "latitude": float(d["latitude"]) if d.get("latitude") else None,
+                    "longitude": float(d["longitude"]) if d.get("longitude") else None,
+                    "arrival_date": d["arrival_date"].isoformat() if d.get("arrival_date") else None,
+                    "departure_date": d["departure_date"].isoformat() if d.get("departure_date") else None
+                }
+                for d in destinations
+            ]
+            
+            # Get routes
+            await cur.execute(queries.GET_ROUTES_FOR_TRIP, (trip["trip_id"],))
+            routes = await cur.fetchall()
+            trip_dict["routes"] = [
+                {
+                    **dict(r),
+                    # Convert Decimal to float
+                    "flight_cost": float(r["flight_cost"]) if r.get("flight_cost") else None,
+                    "departure_time": r["departure_time"].isoformat() if r.get("departure_time") else None,
+                    "arrival_time": r["arrival_time"].isoformat() if r.get("arrival_time") else None
+                }
+                for r in routes
+            ]
+            
+            # Get optimal pathway
+            await cur.execute(queries.GET_OPTIMAL_PATHWAY, (trip["trip_id"],))
+            pathway = await cur.fetchone()
+            if pathway:
+                trip_dict["optimal_pathway"] = {
+                    **dict(pathway),
+                    # Convert Decimal to float
+                    "total_cost": float(pathway["total_cost"]) if pathway.get("total_cost") else None
+                }
+            
+            result.append(trip_dict)
+        
+        return JSONResponse(result)
+        
+    except Exception as e:
+        print(f"Error fetching trips: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/trip/{trip_id}", response_class=HTMLResponse)
+async def view_trip(req: Request, trip_id: int, userId: str, cur: Annotated[Cur, Depends(get_db)]):
+    """
+    View trip details and destinations
+    """
+    await cur.execute(queries.GET_TRIP_BY_ID, (trip_id,))
+    trip = await cur.fetchone()
+    
+    if not trip:
+        raise StarletteHTTPException(status_code=404, detail="Trip not found")
+    
+    await cur.execute(queries.GET_DESTINATIONS_FOR_TRIP, (trip_id,))
+    destinations = await cur.fetchall()
+    
+    await cur.execute(queries.GET_ROUTES_FOR_TRIP, (trip_id,))
+    routes = await cur.fetchall()
+    
+    await cur.execute(queries.GET_OPTIMAL_PATHWAY, (trip_id,))
+    pathway = await cur.fetchone()
+    
+    return templates.TemplateResponse(
+        req, "view_trip.html",
+        {
+            "userId": userId,
+            "trip": trip,
+            "destinations": destinations,
+            "routes": routes,
+            "pathway": pathway
         }
     )
 

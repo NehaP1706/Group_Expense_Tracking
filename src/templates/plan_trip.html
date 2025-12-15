@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plan Trip - Expense Tracker</title>
+    
+    <!-- Leaflet CSS and JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Geocoding plugin for search -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    
+    <style>
+        /* Keep all your existing styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        #map {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            z-index: 1;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 600;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            margin-top: 1rem;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .destination-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .destination-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 0.75rem;
+            position: relative;
+        }
+        .destination-item h4 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .remove-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            width: auto;
+            margin: 0;
+        }
+        .date-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .date-inputs input {
+            padding: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .search-box {
+            margin-bottom: 1rem;
+        }
+        .info-box {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 5px;
+            border-left: 4px solid #2196f3;
+            margin-bottom: 1rem;
+        }
+        /* Make sure Leaflet controls are visible */
+        .leaflet-control-geocoder {
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>✈️ {% if isSolo %}Plan Solo Trip{% else %}Plan Group Trip{% endif %}</h1>
+        <a href="{% if isSolo %}/profile?userId={{ userId }}{% else %}/groups?userId={{ userId }}{% endif %}">← Back</a>
+    </div>
+
+    <div class="container">
+        <!-- Map Section -->
+        <div class="card">
+            <h2>📍 Select Destinations</h2>
+            <div class="info-box">
+                <strong>How to use:</strong> Click the search icon on the map (top right) or click anywhere on the map to add destinations.
+            </div>
+            
+            <div id="map"></div>
+            <button onclick="addCurrentLocation()">📍 Add Current Selection</button>
+        </div>
+
+        <!-- Trip Details Section -->
+        <div class="card">
+            <h2>🗺️ Trip Details</h2>
+            
+            <div class="form-group">
+                <label>Trip Name</label>
+                <input type="text" id="tripName" placeholder="e.g., Europe Backpacking" required>
+            </div>
+
+            <div class="form-group">
+                <label>Travel Class</label>
+                <select id="travelClass">
+                    <option value="economy">Economy</option>
+                    <option value="business">Business</option>
+                    <option value="first">First Class</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="includeDates" onchange="toggleDates()">
+                    Include specific dates for destinations
+                </label>
+                <p style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
+                    If unchecked, we'll calculate all possible routes
+                </p>
+            </div>
+
+            <h3 style="margin: 1.5rem 0 1rem; color: #333;">Selected Destinations</h3>
+            <div class="destination-list" id="destinationList">
+                <p style="color: #666; text-align: center; padding: 2rem;">No destinations added yet</p>
+            </div>
+
+            <button onclick="calculateTrip()">🚀 Calculate Optimal Route</button>
+        </div>
+    </div>
+
+    <script>
+        let map;
+        let markers = [];
+        let destinations = [];
+        let selectedLocation = null;
+        let geocoder;
+        let markerCount = 0;
+
+        const userId = "{{ userId }}";
+        const isSolo = {{ 'true' if isSolo else 'false' }};
+        const groupName = {% if groupName %}"{{ groupName }}"{% else %}null{% endif %};
+
+        function initMap() {
+            // Initialize Leaflet map
+            map = L.map('map').setView([20, 0], 2);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Initialize geocoder
+            geocoder = L.Control.Geocoder.nominatim();
+            
+            // Add search control
+            const searchControl = L.Control.geocoder({
+                geocoder: geocoder,
+                position: 'topright',
+                placeholder: 'Search for a city...',
+                defaultMarkGeocode: false
+            }).on('markgeocode', function(e) {
+                const result = e.geocode;
+                selectedLocation = {
+                    lat: result.center.lat,
+                    lng: result.center.lng,
+                    name: result.name.split(',')[0],
+                    formatted_address: result.html || result.name
+                };
+                map.setView(result.center, 10);
+                
+                // Add temporary marker
+                if (window.tempMarker) {
+                    map.removeLayer(window.tempMarker);
+                }
+                window.tempMarker = L.marker(result.center, {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(map).bindPopup('Click "Add Current Selection" to add this location').openPopup();
+            }).addTo(map);
+            
+            // Click on map to select location
+            map.on('click', function(e) {
+                geocodeLatLng(e.latlng);
+            });
+        }
+
+        function geocodeLatLng(latlng) {
+            geocoder.reverse(latlng, map.options.crs.scale(map.getZoom()), function(results) {
+                if (results.length > 0) {
+                    const result = results[0];
+                    const parts = result.name.split(',');
+                    selectedLocation = {
+                        lat: latlng.lat,
+                        lng: latlng.lng,
+                        name: parts[0].trim(),
+                        formatted_address: result.name
+                    };
+                    
+                    // Add temporary marker
+                    if (window.tempMarker) {
+                        map.removeLayer(window.tempMarker);
+                    }
+                    window.tempMarker = L.marker(latlng, {
+                        icon: L.icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(map).bindPopup(`<b>${selectedLocation.name}</b><br>Click "Add Current Selection" to add`).openPopup();
+                }
+            });
+        }
+
+        function addCurrentLocation() {
+            if (!selectedLocation) {
+                alert('Please search for or click on a location first');
+                return;
+            }
+
+            const parts = selectedLocation.formatted_address.split(',');
+            const city = selectedLocation.name;
+            const country = parts.length > 1 ? parts[parts.length - 1].trim() : 'Unknown';
+
+            destinations.push({
+                city: city,
+                country: country,
+                latitude: selectedLocation.lat,
+                longitude: selectedLocation.lng,
+                airportCode: null,
+                arrivalDate: null,
+                departureDate: null
+            });
+
+            // Remove temporary marker
+            if (window.tempMarker) {
+                map.removeLayer(window.tempMarker);
+                window.tempMarker = null;
+            }
+
+            // Add permanent numbered marker
+            markerCount++;
+            const marker = L.marker([selectedLocation.lat, selectedLocation.lng], {
+                icon: L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background: #667eea; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${markerCount}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                })
+            }).addTo(map);
+            
+            marker.bindPopup(`<b>${markerCount}. ${city}</b>`).openPopup();
+            markers.push(marker);
+
+            updateDestinationList();
+            selectedLocation = null;
+        }
+
+        function updateDestinationList() {
+            const list = document.getElementById('destinationList');
+            if (destinations.length === 0) {
+                list.innerHTML = '<p style="color: #666; text-align: center; padding: 2rem;">No destinations added yet</p>';
+                return;
+            }
+
+            const includeDates = document.getElementById('includeDates').checked;
+
+            list.innerHTML = destinations.map((dest, idx) => `
+                <div class="destination-item">
+                    <button class="remove-btn" onclick="removeDestination(${idx})">✕</button>
+                    <h4>${idx + 1}. ${dest.city}, ${dest.country}</h4>
+                    <p style="color: #666; font-size: 0.9rem;">
+                        ${dest.latitude.toFixed(4)}, ${dest.longitude.toFixed(4)}
+                    </p>
+                    ${includeDates ? `
+                        <div class="date-inputs">
+                            <div>
+                                <label style="font-size: 0.8rem;">Arrival</label>
+                                <input type="datetime-local" onchange="updateDate(${idx}, 'arrival', this.value)">
+                            </div>
+                            <div>
+                                <label style="font-size: 0.8rem;">Departure</label>
+                                <input type="datetime-local" onchange="updateDate(${idx}, 'departure', this.value)">
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function removeDestination(idx) {
+            destinations.splice(idx, 1);
+            if (markers[idx]) {
+                map.removeLayer(markers[idx]);
+            }
+            markers.splice(idx, 1);
+            markerCount--;
+            
+            // Update remaining markers
+            markers.forEach((marker, i) => {
+                marker.setIcon(L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background: #667eea; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${i + 1}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                }));
+                marker.bindPopup(`<b>${i + 1}. ${destinations[i].city}</b>`);
+            });
+            
+            updateDestinationList();
+        }
+
+        function toggleDates() {
+            updateDestinationList();
+        }
+
+        function updateDate(idx, type, value) {
+            if (type === 'arrival') {
+                destinations[idx].arrivalDate = value;
+            } else {
+                destinations[idx].departureDate = value;
+            }
+        }
+
+        async function calculateTrip() {
+            const tripName = document.getElementById('tripName').value;
+            if (!tripName) {
+                alert('Please enter a trip name');
+                return;
+            }
+
+            if (destinations.length < 2) {
+                alert('Please add at least 2 destinations');
+                return;
+            }
+
+            const travelClass = document.getElementById('travelClass').value;
+
+            const payload = {
+                tripName: tripName,
+                groupName: groupName,
+                createdBy: userId,
+                travelClass: travelClass,
+                destinations: destinations
+            };
+
+            try {
+                const response = await fetch('/api/trips/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    const plan = result.trip_plan;
+                    let message = `✅ Trip created successfully!\n\n`;
+                    
+                    if (plan.num_ways) {
+                        message += `📊 There are ${plan.num_ways} different ways to visit all cities\n\n`;
+                    }
+                    
+                    if (plan.total_cost) {
+                        message += `💰 Optimal route total cost: $${plan.total_cost.toFixed(2)}\n\n`;
+                    }
+                    
+                    message += `🗺️ Optimal path:\n`;
+                    plan.path_details.forEach(d => {
+                        message += `${d.order}. ${d.city}, ${d.country}\n`;
+                    });
+                    
+                    alert(message);
+                    
+                    // Redirect to view trip
+                    window.location.href = `/trip/${result.trip_id}?userId=${userId}`;
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error creating trip');
+            }
+        }
+
+        // Initialize map when page loads
+        window.onload = initMap;
+    </script>
+</body>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ trip.trip_name }} - Trip Details</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
+        }
+        .trip-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            margin-bottom: 2rem;
+        }
+        .trip-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .stat-box {
+            background: rgba(255,255,255,0.2);
+            padding: 1rem;
+            border-radius: 5px;
+        }
+        .destination-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .destination-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .destination-card h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .route-arrow {
+            text-align: center;
+            color: #667eea;
+            font-size: 2rem;
+            margin: 0.5rem 0;
+        }
+        .cost-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            margin-left: 1rem;
+        }
+        .events-section {
+            display: none;
+            margin-top: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .events-section.active {
+            display: block;
+        }
+        .add-event-btn {
+            padding: 0.5rem 1rem;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .pathway-info {
+            background: #e3f2fd;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>✈️ {{ trip.trip_name }}</h1>
+        <a href="{% if trip.group_name %}/groups?userId={{ userId }}{% else %}/profile?userId={{ userId }}{% endif %}">← Back</a>
+    </div>
+
+    <div class="container">
+        <div class="trip-header">
+            <h1>{{ trip.trip_name }}</h1>
+            <p style="margin-top: 0.5rem; opacity: 0.9;">
+                {% if trip.group_name %}Group Trip: {{ trip.group_name }}{% else %}Solo Trip{% endif %}
+            </p>
+            <div class="trip-stats">
+                <div class="stat-box">
+                    <div style="font-size: 0.9rem; opacity: 0.8;">Travel Class</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">
+                        {{ trip.travel_class.title() }}
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div style="font-size: 0.9rem; opacity: 0.8;">Destinations</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">
+                        {{ destinations|length }}
+                    </div>
+                </div>
+                {% if pathway %}
+                <div class="stat-box">
+                    <div style="font-size: 0.9rem; opacity: 0.8;">Total Cost</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">
+                        ${{ pathway.total_cost|round(2) if pathway.total_cost else 'N/A' }}
+                    </div>
+                </div>
+                {% if pathway.total_ways > 1 %}
+                <div class="stat-box">
+                    <div style="font-size: 0.9rem; opacity: 0.8;">Possible Routes</div>
+                    <div style="font-size: 1.5rem; font-weight: 600; margin-top: 0.25rem;">
+                        {{ pathway.total_ways }}
+                    </div>
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if pathway and pathway.total_ways > 1 %}
+        <div class="card">
+            <div class="pathway-info">
+                <h3 style="color: #2196f3; margin-bottom: 0.5rem;">🧮 Route Analysis</h3>
+                <p>Based on the Hamiltonian path algorithm, there are <strong>{{ pathway.total_ways }}</strong> different ways to visit all destinations. The route shown below is the optimal path with the minimum total cost.</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <h2>🗺️ Itinerary</h2>
+            {% for dest in destinations %}
+                <div class="destination-card" onclick="toggleEvents('dest-{{ dest.destination_id }}')">
+                    <h3>Stop {{ dest.visit_order }}: {{ dest.city }}, {{ dest.country }}</h3>
+                    {% if dest.airport_code %}
+                    <p style="color: #666;">Airport: {{ dest.airport_code }}</p>
+                    {% endif %}
+                    {% if dest.arrival_date %}
+                    <p style="color: #666; margin-top: 0.5rem;">
+                        📅 Arrival: {{ dest.arrival_date.strftime('%B %d, %Y at %I:%M %p') }}
+                    </p>
+                    {% endif %}
+                    {% if dest.departure_date %}
+                    <p style="color: #666;">
+                        📅 Departure: {{ dest.departure_date.strftime('%B %d, %Y at %I:%M %p') }}
+                    </p>
+                    {% endif %}
+                    <p style="margin-top: 1rem; color: #667eea; font-size: 0.9rem;">
+                        Click to add events and expenses for this destination ▼
+                    </p>
+                    
+                    <div class="events-section" id="dest-{{ dest.destination_id }}">
+                        <h4>Events in {{ dest.city }}</h4>
+                        <p style="color: #666; margin: 1rem 0;">Add events and expenses for this destination (Coming soon)</p>
+                        <button class="add-event-btn" onclick="addEventForDestination('{{ trip.group_name or '' }}', '{{ dest.city }}', event)">
+                            ➕ Add Event
+                        </button>
+                    </div>
+                </div>
+
+                {% if not loop.last %}
+                    {% set route = routes|selectattr('from_city', 'equalto', dest.city)|first %}
+                    {% if route %}
+                    <div class="route-arrow">
+                        ✈️ 
+                        {% if route.flight_cost %}
+                        <span class="cost-badge">${{ route.flight_cost|round(2) }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        {% if routes %}
+        <div class="card">
+            <h2>🛫 Flight Routes</h2>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8f9fa; text-align: left;">
+                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">From</th>
+                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">To</th>
+                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">Cost</th>
+                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">Airline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for route in routes %}
+                        <tr>
+                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
+                                {{ route.from_city }} ({{ route.from_airport }})
+                            </td>
+                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
+                                {{ route.to_city }} ({{ route.to_airport }})
+                            </td>
+                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
+                                {% if route.flight_cost %}
+                                ${{ route.flight_cost|round(2) }}
+                                {% else %}
+                                TBD
+                                {% endif %}
+                            </td>
+                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
+                                {{ route.airline or 'TBD' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleEvents(id) {
+            event.stopPropagation();
+            const section = document.getElementById(id);
+            section.classList.toggle('active');
+        }
+
+        function addEventForDestination(groupName, city, e) {
+            e.stopPropagation();
+            // Redirect to groups page or add event interface
+            if (groupName) {
+                alert(`Adding event for ${city} in group ${groupName}`);
+                // Implement event creation logic here
+            } else {
+                alert(`This is a solo trip. Event tracking for solo trips coming soon!`);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -127,4 +127,56 @@ create table if not exists ChatExtracted (
     foreign key (username) references User(username) on update cascade on delete cascade
 );
 
+-- Trip planning tables
+create table if not exists Trip (
+    trip_id int primary key auto_increment,
+    trip_name varchar(200) not null,
+    group_name varchar(200),  -- NULL for solo trips
+    created_by varchar(100) not null,
+    travel_class enum('economy', 'business', 'first') default 'economy',
+    created_at timestamp not null default current_timestamp,
+    foreign key (group_name) references `Group`(group_name) on update cascade on delete cascade,
+    foreign key (created_by) references User(username) on update cascade on delete cascade
+);
+
+create table if not exists TripDestination (
+    destination_id int primary key auto_increment,
+    trip_id int not null,
+    city varchar(100) not null,
+    country varchar(100) not null,
+    airport_code varchar(10),
+    latitude decimal(10, 8),
+    longitude decimal(11, 8),
+    visit_order int not null,  -- Order of visit (1, 2, 3, ...)
+    arrival_date datetime,
+    departure_date datetime,
+    foreign key (trip_id) references Trip(trip_id) on update cascade on delete cascade
+);
+
+create table if not exists TripRoute (
+    route_id int primary key auto_increment,
+    trip_id int not null,
+    from_destination_id int not null,
+    to_destination_id int not null,
+    flight_cost decimal(10, 2),
+    airline varchar(100),
+    flight_number varchar(20),
+    departure_time datetime,
+    arrival_time datetime,
+    foreign key (trip_id) references Trip(trip_id) on update cascade on delete cascade,
+    foreign key (from_destination_id) references TripDestination(destination_id) on update cascade on delete cascade,
+    foreign key (to_destination_id) references TripDestination(destination_id) on update cascade on delete cascade
+);
+
+-- Store the Hamilton path calculation results
+create table if not exists TripPathways (
+    pathway_id int primary key auto_increment,
+    trip_id int not null,
+    path_sequence text not null,  -- JSON array of destination_ids
+    total_cost decimal(10, 2),
+    total_ways int,  -- Number of ways to complete this path
+    is_optimal boolean default false,
+    foreign key (trip_id) references Trip(trip_id) on update cascade on delete cascade
+);
+
 commit;

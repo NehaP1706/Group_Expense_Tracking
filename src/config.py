@@ -9,6 +9,8 @@ class Config(BaseSettings):
     mysql_user: str
     mysql_pass: str
     secret_phrase: str | None = None
+    google_maps_api_key: str = ""  # NEW - Add this
+    aviation_api_key: str = ""     # NEW - Add this
 
     model_config = SettingsConfigDict(env_file=".env")
 
