@@ -23,6 +23,7 @@ cat src/schema.sql | docker exec -i $CONTAINER_NAME mysql -u$USER -p$PASSWORD ex
 ```
 
 ## Environment Variable Configs:
+The setup process for Google Maps API was daunting and so a workaround using OpenStreetMap + Leaflet has been used in its place.
 Make a `.env` file with the necessary passkeys as below:
 
 ```c
@@ -31,6 +32,8 @@ MYSQL_PORT=3306
 MYSQL_DB=expense_tracker
 MYSQL_USER=USER
 MYSQL_PASS=PASSWORD
+GOOGLE_MAPS_API_KEY=MAPS_KEY
+AVIATION_API_KEY=AVIATION_KEY
 ```
 ## General:
 Run the following commands to launch:
