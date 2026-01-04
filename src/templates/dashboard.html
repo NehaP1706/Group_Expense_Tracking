@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Expense Tracker</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='images/logo.png') }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -120,11 +121,13 @@
 </head>
 <body>
     <div class="navbar">
-        <h1>💰 Expense Tracker</h1>
-        <div class="user-info">
-            <span>Welcome, {{ user.first_name }}!</span>
-        </div>
+    <a href="/dashboard?userId={{ user.username }}" style="display: flex; align-items: center; text-decoration: none; color: white;">
+        <img src="{{ url_for('static', path='images/logo.png') }}" alt="Logo" style="height: 40px; margin-right: 10px;">
+        <h1>Expense Tracker</h1>
+    </a>
     </div>
+    
+    <div class="user-info">
 
     <div class="container">
         <div class="welcome-card">
@@ -165,6 +168,7 @@
                 </div>
             </a>
         </div>
+    </div>
     </div>
     {% include "chatbot_widget.html" %}
 </body>

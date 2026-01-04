@@ -1,243 +1,355 @@
 # src/trip_planner.py
 """
-Trip planning algorithms based on CSES problem 1690 (Hamiltonian Paths)
-Calculates number of ways to visit all cities and optimal routes
+Simplified trip planner using Aviation Edge Timetable API
+Finds all feasible Hamiltonian paths with flight availability
 """
 
 import requests
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime, timedelta
-import json
+from itertools import permutations
+import time
 
 
 class TripPlanner:
     def __init__(self, aviation_api_key: str):
         self.api_key = aviation_api_key
-        self.base_url = "http://api.aviationstack.com/v1/flights"
+        self.timetable_url = "https://aviation-edge.com/v2/public/timetable"
+        self.flight_cache = {}  # Cache to avoid repeated API calls
+        self.last_request_time = 0
+        self.min_request_interval = 1.0  # 1 second between requests
     
-    def count_hamiltonian_paths(self, n: int, adj_matrix: List[List[bool]], 
-                                start: int = 0, end: int = None) -> int:
-        """
-        Count number of Hamiltonian paths from start to end
-        Based on CSES 1690 - Dynamic Programming with bitmask
+    def get_airport_code(self, city_name: str) -> Optional[str]:
+        """Map city names to IATA airport codes"""
+        airport_map = {
+            # India
+            "bengaluru": "BLR", "bangalore": "BLR",
+            "mumbai": "BOM", "bombay": "BOM",
+            "delhi": "DEL", "new delhi": "DEL",
+            "chennai": "MAA", "madras": "MAA",
+            "kolkata": "CCU", "calcutta": "CCU",
+            "hyderabad": "HYD",
+            "pune": "PNQ",
+            "ahmedabad": "AMD",
+            "goa": "GOI",
+            "kochi": "COK", "cochin": "COK",
+            
+            # International
+            "london": "LHR",
+            "paris": "CDG",
+            "new york": "JFK",
+            "dubai": "DXB",
+            "singapore": "SIN",
+            "tokyo": "NRT",
+            "bangkok": "BKK",
+            "hong kong": "HKG",
+            "sydney": "SYD",
+            "los angeles": "LAX",
+            "san francisco": "SFO",
+            "chicago": "ORD",
+            "miami": "MIA",
+            "toronto": "YYZ",
+            "vancouver": "YVR",
+            "frankfurt": "FRA",
+            "amsterdam": "AMS",
+            "rome": "FCO",
+            "barcelona": "BCN",
+            "madrid": "MAD",
+            "istanbul": "IST",
+            "doha": "DOH",
+            "abu dhabi": "AUH",
+            "kuala lumpur": "KUL",
+            "jakarta": "CGK",
+            "seoul": "ICN",
+            "beijing": "PEK",
+            "shanghai": "PVG",
+        }
         
-        dp[mask][i] = number of ways to reach city i with cities in mask visited
-        """
-        if end is None:
-            end = n - 1
-        
-        # dp[mask][i] = number of paths ending at i with visited cities represented by mask
-        dp = [[0] * n for _ in range(1 << n)]
-        dp[1 << start][start] = 1
-        
-        MOD = 10**9 + 7
-        
-        for mask in range(1 << n):
-            for i in range(n):
-                if not (mask & (1 << i)):
-                    continue
-                if dp[mask][i] == 0:
-                    continue
-                
-                for j in range(n):
-                    if mask & (1 << j):
-                        continue
-                    if not adj_matrix[i][j]:
-                        continue
-                    
-                    new_mask = mask | (1 << j)
-                    dp[new_mask][j] = (dp[new_mask][j] + dp[mask][i]) % MOD
-        
-        # Return paths that visit all cities and end at the target
-        full_mask = (1 << n) - 1
-        return dp[full_mask][end]
+        city_lower = city_name.lower().strip()
+        return airport_map.get(city_lower)
     
-    def find_optimal_path_with_costs(self, n: int, cost_matrix: List[List[float]], 
-                                     start: int = 0, end: int = None) -> Tuple[float, List[int]]:
+    def fetch_flights(self, from_airport: str, limit: int = 50) -> List[Dict]:
         """
-        Find minimum cost Hamiltonian path using DP
-        Returns (min_cost, path)
+        Fetch departure flights from an airport with caching and rate limiting
+        Returns list of flight dictionaries
         """
-        if end is None:
-            end = n - 1
+        # Check cache first
+        if from_airport in self.flight_cache:
+            print(f"Using cached data for {from_airport}")
+            return self.flight_cache[from_airport]
         
-        INF = float('inf')
-        dp = [[INF] * n for _ in range(1 << n)]
-        parent = [[None] * n for _ in range(1 << n)]
+        # Rate limiting - wait if needed
+        elapsed = time.time() - self.last_request_time
+        if elapsed < self.min_request_interval:
+            wait_time = self.min_request_interval - elapsed
+            print(f"Rate limiting: waiting {wait_time:.2f}s...")
+            time.sleep(wait_time)
         
-        dp[1 << start][start] = 0
+        params = {
+            "key": self.api_key,
+            "iataCode": from_airport,
+            "type": "departure"
+        }
         
-        for mask in range(1 << n):
-            for i in range(n):
-                if not (mask & (1 << i)):
-                    continue
-                if dp[mask][i] == INF:
-                    continue
-                
-                for j in range(n):
-                    if mask & (1 << j):
-                        continue
-                    if cost_matrix[i][j] == INF:
-                        continue
-                    
-                    new_mask = mask | (1 << j)
-                    new_cost = dp[mask][i] + cost_matrix[i][j]
-                    
-                    if new_cost < dp[new_mask][j]:
-                        dp[new_mask][j] = new_cost
-                        parent[new_mask][j] = (mask, i)
-        
-        full_mask = (1 << n) - 1
-        min_cost = dp[full_mask][end]
-        
-        # Reconstruct path
-        path = []
-        mask = full_mask
-        curr = end
-        
-        while curr is not None:
-            path.append(curr)
-            if parent[mask][curr] is None:
-                break
-            mask, curr = parent[mask][curr]
-        
-        path.reverse()
-        return min_cost, path
+        try:
+            self.last_request_time = time.time()
+            response = requests.get(self.timetable_url, params=params, timeout=15)
+            
+            if response.status_code != 200:
+                print(f"API error: Status {response.status_code} for {from_airport}")
+                print(f"Response: {response.text[:200]}")
+                return []
+            
+            data = response.json()
+            
+            # Check if API returned an error
+            if isinstance(data, dict):
+                if "error" in data:
+                    print(f"API Error for {from_airport}: {data.get('error')}")
+                    if "rate limit" in str(data.get('error')).lower():
+                        print("⚠️ RATE LIMIT EXCEEDED - Free tier limit reached")
+                    return []
+                if "message" in data:
+                    print(f"API Message for {from_airport}: {data.get('message')}")
+                    return []
+                # If it's a dict with 'data' key
+                if "data" in data and isinstance(data["data"], list):
+                    flights = data["data"][:limit]
+                    self.flight_cache[from_airport] = flights
+                    return flights
+                print(f"Unexpected dict format for {from_airport}: {list(data.keys())}")
+                print(f"Full response: {data}")
+                return []
+            
+            if not isinstance(data, list):
+                print(f"Unexpected response type for {from_airport}: {type(data)}")
+                print(f"Response sample: {str(data)[:200]}")
+                return []
+            
+            # Cache the results
+            flights = data[:limit]
+            self.flight_cache[from_airport] = flights
+            return flights
+            
+        except Exception as e:
+            print(f"Error fetching flights from {from_airport}: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
     
-    async def get_flight_costs(self, destinations: List[Dict], travel_class: str = "economy") -> List[List[float]]:
+    def check_flight_exists(self, from_airport: str, to_airport: str) -> bool:
         """
-        Get flight costs between all pairs of destinations using Aviation Stack API
-        Returns adjacency matrix with costs
+        Check if direct flight exists between two airports
         """
-        n = len(destinations)
-        cost_matrix = [[float('inf')] * n for _ in range(n)]
+        flights = self.fetch_flights(from_airport)
         
-        # Diagonal is 0 (staying in same city)
-        for i in range(n):
-            cost_matrix[i][i] = 0
+        for flight in flights:
+            arrival = flight.get("arrival", {}) or {}
+            arr_iata = arrival.get("iataCode")
+            
+            if arr_iata == to_airport:
+                return True
         
-        # Query flights between each pair
+        return False
+    
+    def build_adjacency_matrix(self, cities: List[Dict]) -> List[List[bool]]:
+        """
+        Build adjacency matrix showing which city pairs have direct flights
+        cities: [{"city": "Mumbai", "airport": "BOM"}, ...]
+        Returns: n x n boolean matrix
+        """
+        n = len(cities)
+        adj_matrix = [[False] * n for _ in range(n)]
+        
+        print(f"\nChecking flight connectivity for {n} cities...")
+        
         for i in range(n):
             for j in range(n):
                 if i == j:
+                    adj_matrix[i][j] = False  # No self-loops
                     continue
                 
-                from_airport = destinations[i].get('airport_code')
-                to_airport = destinations[j].get('airport_code')
+                from_airport = cities[i]["airport"]
+                to_airport = cities[j]["airport"]
                 
-                if not from_airport or not to_airport:
-                    continue
+                print(f"Checking {from_airport} → {to_airport}...", end=" ")
                 
-                try:
-                    cost = await self._fetch_flight_cost(
-                        from_airport, to_airport, 
-                        destinations[i].get('departure_date'),
-                        travel_class
-                    )
-                    if cost is not None:
-                        cost_matrix[i][j] = cost
-                except Exception as e:
-                    print(f"Error fetching flight {from_airport}->{to_airport}: {e}")
+                has_flight = self.check_flight_exists(from_airport, to_airport)
+                adj_matrix[i][j] = has_flight
+                
+                print("✓" if has_flight else "✗")
         
-        return cost_matrix
+        return adj_matrix
     
-    async def _fetch_flight_cost(self, from_airport: str, to_airport: str, 
-                                 date: Optional[datetime], travel_class: str) -> Optional[float]:
+    def find_all_hamiltonian_paths(self, n: int, adj_matrix: List[List[bool]], 
+                                   start_idx: int, end_idx: int) -> List[List[int]]:
         """
-        Fetch flight cost from Aviation Stack API
+        Find all Hamiltonian paths from start_idx to end_idx
+        Uses backtracking to enumerate all valid paths
         """
-        params = {
-            "access_key": self.api_key,
-            "dep_iata": from_airport,
-            "arr_iata": to_airport,
-            "limit": 5
-        }
+        all_paths = []
+        visited = [False] * n
+        path = []
         
-        # Note: Free tier doesn't support flight_date, so we get current flights
-        # In production, use paid tier or another API with better flight search
+        def backtrack(current: int):
+            path.append(current)
+            visited[current] = True
+            
+            # If we've visited all cities
+            if len(path) == n:
+                # Check if we end at the target
+                if current == end_idx:
+                    all_paths.append(path[:])
+            else:
+                # Try visiting each unvisited neighbor
+                for next_city in range(n):
+                    if not visited[next_city] and adj_matrix[current][next_city]:
+                        backtrack(next_city)
+            
+            # Backtrack
+            path.pop()
+            visited[current] = False
         
-        try:
-            response = requests.get(self.base_url, params=params, timeout=10)
-            data = response.json()
-            
-            if "data" not in data or not data["data"]:
-                # No direct flights, estimate based on distance
-                return self._estimate_cost_by_distance(from_airport, to_airport, travel_class)
-            
-            # For demo, use a simple pricing model
-            # Real implementation would parse actual flight prices
-            base_cost = 200  # Base cost in currency
-            
-            if travel_class == "business":
-                base_cost *= 2.5
-            elif travel_class == "first":
-                base_cost *= 4
-            
-            return base_cost
-            
-        except Exception as e:
-            print(f"API Error: {e}")
-            return self._estimate_cost_by_distance(from_airport, to_airport, travel_class)
+        backtrack(start_idx)
+        return all_paths
     
-    def _estimate_cost_by_distance(self, from_code: str, to_code: str, travel_class: str) -> float:
+    def get_flight_options(self, from_airport: str, to_airport: str, 
+                          travel_date: datetime) -> List[Dict]:
         """
-        Estimate flight cost based on typical distance pricing
-        Fallback when API doesn't return results
+        Get available flights between two airports
         """
-        # Simple estimation: assume average flight costs
-        base_costs = {
-            "economy": 250,
-            "business": 600,
-            "first": 1000
-        }
-        return base_costs.get(travel_class, 250)
+        flights = self.fetch_flights(from_airport)
+        
+        matching_flights = []
+        for flight in flights:
+            arrival = flight.get("arrival", {}) or {}
+            arr_iata = arrival.get("iataCode")
+            
+            if arr_iata == to_airport:
+                airline = (flight.get("airline", {}) or {}).get("name", "Unknown")
+                flight_num = (flight.get("flight", {}) or {}).get("iataNumber", "")
+                
+                dep = flight.get("departure", {}) or {}
+                arr = flight.get("arrival", {}) or {}
+                
+                dep_time = dep.get("scheduledTimeLocal") or dep.get("scheduledTime")
+                arr_time = arr.get("scheduledTimeLocal") or arr.get("scheduledTime")
+                
+                matching_flights.append({
+                    "airline": airline,
+                    "flight_number": flight_num,
+                    "departure_time": dep_time,
+                    "arrival_time": arr_time,
+                    "from_airport": from_airport,
+                    "to_airport": to_airport
+                })
+        
+        return matching_flights[:5]  # Limit to 5 options per route
     
-    def create_adjacency_matrix(self, destinations: List[Dict]) -> List[List[bool]]:
+    def calculate_trip_plan(self, cities: List[Dict], start_date: datetime) -> Dict:
         """
-        Create boolean adjacency matrix (all cities connected for complete graph)
+        Main function to calculate all possible trip plans
+        cities: [{"city": "Mumbai", "days": 2, "airport": "BOM", "country": "India"}, ...]
+        First city is start, last city is end (both fixed)
         """
-        n = len(destinations)
-        return [[i != j for j in range(n)] for i in range(n)]
-    
-    def calculate_trip_plan(self, destinations: List[Dict], cost_matrix: List[List[float]], 
-                           has_dates: bool) -> Dict:
-        """
-        Main function to calculate trip plan
-        Returns dict with paths, costs, and number of ways
-        """
-        n = len(destinations)
+        n = len(cities)
         
         if n < 2:
             return {
-                "error": "Need at least 2 destinations",
-                "num_ways": 0,
-                "optimal_path": [],
-                "total_cost": 0
+                "error": "Need at least 2 cities",
+                "paths": []
             }
         
-        result = {}
+        # Add airport codes
+        for city in cities:
+            if not city.get("airport"):
+                airport = self.get_airport_code(city["city"])
+                if not airport:
+                    return {
+                        "error": f"Unknown airport for city: {city['city']}",
+                        "paths": []
+                    }
+                city["airport"] = airport
         
-        if not has_dates:
-            # Calculate number of possible ways (Hamiltonian paths)
-            adj_matrix = self.create_adjacency_matrix(destinations)
-            num_ways = self.count_hamiltonian_paths(n, adj_matrix, 0, n-1)
-            result["num_ways"] = num_ways
-            result["message"] = f"There are {num_ways} different ways to visit all cities"
+        # Build adjacency matrix (check flight availability)
+        adj_matrix = self.build_adjacency_matrix(cities)
         
-        # Always calculate optimal path with costs
-        min_cost, optimal_path = self.find_optimal_path_with_costs(n, cost_matrix, 0, n-1)
+        # Find all Hamiltonian paths from first to last city
+        start_idx = 0
+        end_idx = n - 1
         
-        result.update({
-            "optimal_path": optimal_path,
-            "total_cost": min_cost if min_cost != float('inf') else None,
-            "path_details": [
-                {
-                    "city": destinations[i]["city"],
-                    "country": destinations[i]["country"],
-                    "order": i + 1
-                }
-                for i in optimal_path
-            ]
-        })
+        print(f"\nFinding all paths from {cities[start_idx]['city']} to {cities[end_idx]['city']}...")
+        all_paths = self.find_all_hamiltonian_paths(n, adj_matrix, start_idx, end_idx)
         
-        return result
+        if not all_paths:
+            return {
+                "error": f"No valid routes found from {cities[start_idx]['city']} to {cities[end_idx]['city']}",
+                "paths": [],
+                "num_paths": 0
+            }
+        
+        print(f"Found {len(all_paths)} valid paths!")
+        
+        # Format results with flight details
+        result_paths = []
+        current_date = start_date
+        
+        for path_idx, path in enumerate(all_paths):
+            route_details = []
+            flights = []
+            current_date = start_date
+            
+            for idx, city_idx in enumerate(path):
+                city = cities[city_idx]
+                
+                arrival_date = current_date
+                departure_date = current_date + timedelta(days=city["days"])
+                
+                route_details.append({
+                    "order": idx + 1,
+                    "city": city["city"],
+                    "country": city["country"],
+                    "airport": city["airport"],
+                    "days": city["days"],
+                    "arrival_date": arrival_date.strftime("%Y-%m-%d"),
+                    "departure_date": departure_date.strftime("%Y-%m-%d")
+                })
+                
+                # Get flight options to next city
+                if idx < len(path) - 1:
+                    next_city_idx = path[idx + 1]
+                    next_city = cities[next_city_idx]
+                    
+                    flight_options = self.get_flight_options(
+                        city["airport"], 
+                        next_city["airport"],
+                        departure_date
+                    )
+                    
+                    flights.append({
+                        "from": city["city"],
+                        "to": next_city["city"],
+                        "from_airport": city["airport"],
+                        "to_airport": next_city["airport"],
+                        "date": departure_date.strftime("%Y-%m-%d"),
+                        "options": flight_options
+                    })
+                
+                current_date = departure_date
+            
+            result_paths.append({
+                "path_number": path_idx + 1,
+                "path_indices": path,
+                "route": route_details,
+                "flights": flights,
+                "total_duration_days": sum(c["days"] for c in cities)
+            })
+        
+        return {
+            "num_paths": len(all_paths),
+            "paths": result_paths,
+            "start_city": cities[start_idx]["city"],
+            "end_city": cities[end_idx]["city"],
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "message": f"Found {len(all_paths)} valid route(s) from {cities[start_idx]['city']} to {cities[end_idx]['city']}"
+        }

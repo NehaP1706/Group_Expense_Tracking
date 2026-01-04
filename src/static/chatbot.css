@@ -383,3 +383,17 @@
         border-radius: 12px;
     }
 }
+
+/* Action Button Styling */
+.chatbot-message button {
+    transition: transform 0.2s ease;
+}
+
+.chatbot-message button:hover {
+    transform: scale(1.05);
+}
+
+/* Better message formatting */
+.message-bubble span {
+    display: inline-block;
+}

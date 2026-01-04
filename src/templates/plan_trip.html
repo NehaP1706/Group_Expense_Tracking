@@ -5,16 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Plan Trip - Expense Tracker</title>
     
-    <!-- Leaflet CSS and JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
-    <!-- Geocoding plugin for search -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
     <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
     
     <style>
-        /* Keep all your existing styles */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -122,18 +119,19 @@
             width: auto;
             margin: 0;
         }
-        .date-inputs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.5rem;
+        .days-input {
             margin-top: 0.5rem;
         }
-        .date-inputs input {
+        .days-input label {
+            font-size: 0.85rem;
+            color: #666;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        .days-input input {
+            width: 100%;
             padding: 0.5rem;
             font-size: 0.9rem;
-        }
-        .search-box {
-            margin-bottom: 1rem;
         }
         .info-box {
             background: #e3f2fd;
@@ -142,9 +140,24 @@
             border-left: 4px solid #2196f3;
             margin-bottom: 1rem;
         }
-        /* Make sure Leaflet controls are visible */
         .leaflet-control-geocoder {
             z-index: 1000;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+            color: #667eea;
+        }
+        .loading.active {
+            display: block;
         }
     </style>
 </head>
@@ -157,9 +170,9 @@
     <div class="container">
         <!-- Map Section -->
         <div class="card">
-            <h2>📍 Select Destinations</h2>
+            <h2>🗺️ Select Destinations</h2>
             <div class="info-box">
-                <strong>How to use:</strong> Click the search icon on the map (top right) or click anywhere on the map to add destinations.
+                <strong>How to use:</strong> Click the search icon on the map or click anywhere to add destinations. First city = start, last city = end.
             </div>
             
             <div id="map"></div>
@@ -168,30 +181,20 @@
 
         <!-- Trip Details Section -->
         <div class="card">
-            <h2>🗺️ Trip Details</h2>
+            <h2>📋 Trip Details</h2>
             
             <div class="form-group">
                 <label>Trip Name</label>
-                <input type="text" id="tripName" placeholder="e.g., Europe Backpacking" required>
+                <input type="text" id="tripName" placeholder="e.g., India Tour 2025" required>
             </div>
 
             <div class="form-group">
-                <label>Travel Class</label>
-                <select id="travelClass">
-                    <option value="economy">Economy</option>
-                    <option value="business">Business</option>
-                    <option value="first">First Class</option>
-                </select>
+                <label>Start Date</label>
+                <input type="date" id="startDate" required>
             </div>
 
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" id="includeDates" onchange="toggleDates()">
-                    Include specific dates for destinations
-                </label>
-                <p style="font-size: 0.9rem; color: #666; margin-top: 0.25rem;">
-                    If unchecked, we'll calculate all possible routes
-                </p>
+            <div class="warning-box">
+                <strong>⚠️ Important:</strong> The first city you add will be your starting point, and the last city will be your ending point. All routes will go from first → last city.
             </div>
 
             <h3 style="margin: 1.5rem 0 1rem; color: #333;">Selected Destinations</h3>
@@ -199,7 +202,12 @@
                 <p style="color: #666; text-align: center; padding: 2rem;">No destinations added yet</p>
             </div>
 
-            <button onclick="calculateTrip()">🚀 Calculate Optimal Route</button>
+            <div class="loading" id="loadingIndicator">
+                <p>🔍 Checking flight availability and calculating routes...</p>
+                <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">This may take a minute...</p>
+            </div>
+
+            <button onclick="calculateTrip()">🚀 Find All Possible Routes</button>
         </div>
     </div>
 
@@ -211,24 +219,21 @@
         let geocoder;
         let markerCount = 0;
 
+        // Get user context from template
         const userId = "{{ userId }}";
         const isSolo = {{ 'true' if isSolo else 'false' }};
         const groupName = {% if groupName %}"{{ groupName }}"{% else %}null{% endif %};
 
         function initMap() {
-            // Initialize Leaflet map
             map = L.map('map').setView([20, 0], 2);
             
-            // Add OpenStreetMap tiles
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                attribution: '© OpenStreetMap contributors',
                 maxZoom: 19
             }).addTo(map);
             
-            // Initialize geocoder
             geocoder = L.Control.Geocoder.nominatim();
             
-            // Add search control
             const searchControl = L.Control.geocoder({
                 geocoder: geocoder,
                 position: 'topright',
@@ -244,7 +249,6 @@
                 };
                 map.setView(result.center, 10);
                 
-                // Add temporary marker
                 if (window.tempMarker) {
                     map.removeLayer(window.tempMarker);
                 }
@@ -257,13 +261,15 @@
                         popupAnchor: [1, -34],
                         shadowSize: [41, 41]
                     })
-                }).addTo(map).bindPopup('Click "Add Current Selection" to add this location').openPopup();
+                }).addTo(map).bindPopup('Click "Add Current Selection"').openPopup();
             }).addTo(map);
             
-            // Click on map to select location
             map.on('click', function(e) {
                 geocodeLatLng(e.latlng);
             });
+            
+            // Set default start date to today
+            document.getElementById('startDate').valueAsDate = new Date();
         }
 
         function geocodeLatLng(latlng) {
@@ -278,7 +284,6 @@
                         formatted_address: result.name
                     };
                     
-                    // Add temporary marker
                     if (window.tempMarker) {
                         map.removeLayer(window.tempMarker);
                     }
@@ -291,7 +296,7 @@
                             popupAnchor: [1, -34],
                             shadowSize: [41, 41]
                         })
-                    }).addTo(map).bindPopup(`<b>${selectedLocation.name}</b><br>Click "Add Current Selection" to add`).openPopup();
+                    }).addTo(map).bindPopup(`<b>${selectedLocation.name}</b><br>Click "Add Current Selection"`).openPopup();
                 }
             });
         }
@@ -311,18 +316,14 @@
                 country: country,
                 latitude: selectedLocation.lat,
                 longitude: selectedLocation.lng,
-                airportCode: null,
-                arrivalDate: null,
-                departureDate: null
+                days: 2  // Default 2 days
             });
 
-            // Remove temporary marker
             if (window.tempMarker) {
                 map.removeLayer(window.tempMarker);
                 window.tempMarker = null;
             }
 
-            // Add permanent numbered marker
             markerCount++;
             const marker = L.marker([selectedLocation.lat, selectedLocation.lng], {
                 icon: L.divIcon({
@@ -347,27 +348,18 @@
                 return;
             }
 
-            const includeDates = document.getElementById('includeDates').checked;
-
             list.innerHTML = destinations.map((dest, idx) => `
                 <div class="destination-item">
                     <button class="remove-btn" onclick="removeDestination(${idx})">✕</button>
-                    <h4>${idx + 1}. ${dest.city}, ${dest.country}</h4>
+                    <h4>${idx + 1}. ${dest.city}, ${dest.country} ${idx === 0 ? '(Start)' : idx === destinations.length - 1 ? '(End)' : ''}</h4>
                     <p style="color: #666; font-size: 0.9rem;">
                         ${dest.latitude.toFixed(4)}, ${dest.longitude.toFixed(4)}
                     </p>
-                    ${includeDates ? `
-                        <div class="date-inputs">
-                            <div>
-                                <label style="font-size: 0.8rem;">Arrival</label>
-                                <input type="datetime-local" onchange="updateDate(${idx}, 'arrival', this.value)">
-                            </div>
-                            <div>
-                                <label style="font-size: 0.8rem;">Departure</label>
-                                <input type="datetime-local" onchange="updateDate(${idx}, 'departure', this.value)">
-                            </div>
-                        </div>
-                    ` : ''}
+                    <div class="days-input">
+                        <label>Days to spend in ${dest.city}:</label>
+                        <input type="number" min="1" max="30" value="${dest.days}" 
+                               onchange="updateDays(${idx}, this.value)">
+                    </div>
                 </div>
             `).join('');
         }
@@ -380,7 +372,6 @@
             markers.splice(idx, 1);
             markerCount--;
             
-            // Update remaining markers
             markers.forEach((marker, i) => {
                 marker.setIcon(L.divIcon({
                     className: 'custom-marker',
@@ -394,22 +385,21 @@
             updateDestinationList();
         }
 
-        function toggleDates() {
-            updateDestinationList();
-        }
-
-        function updateDate(idx, type, value) {
-            if (type === 'arrival') {
-                destinations[idx].arrivalDate = value;
-            } else {
-                destinations[idx].departureDate = value;
-            }
+        function updateDays(idx, value) {
+            destinations[idx].days = parseInt(value) || 2;
         }
 
         async function calculateTrip() {
             const tripName = document.getElementById('tripName').value;
+            const startDate = document.getElementById('startDate').value;
+            
             if (!tripName) {
                 alert('Please enter a trip name');
+                return;
+            }
+
+            if (!startDate) {
+                alert('Please select a start date');
                 return;
             }
 
@@ -418,18 +408,62 @@
                 return;
             }
 
-            const travelClass = document.getElementById('travelClass').value;
-
             const payload = {
                 tripName: tripName,
                 groupName: groupName,
                 createdBy: userId,
-                travelClass: travelClass,
+                startDate: startDate,
                 destinations: destinations
             };
 
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            loadingIndicator.classList.add('active');
+
             try {
-                const response = await fetch('/api/trips/create', {
+                const response = await fetch('/api/trips/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                loadingIndicator.classList.remove('active');
+
+                if (response.ok) {
+                    const numPaths = result.num_paths;
+                    
+                    if (numPaths === 0) {
+                        alert('❌ No valid routes found. There may not be direct flights between some cities.');
+                        return;
+                    }
+                    
+                    // Now save the trip to database
+                    await saveTrip(result);
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                loadingIndicator.classList.remove('active');
+                console.error(err);
+                alert('Error calculating trip routes');
+            }
+        }
+
+        async function saveTrip(routeData) {
+            try {
+                const tripName = document.getElementById('tripName').value;
+                const startDate = document.getElementById('startDate').value;
+                
+                const payload = {
+                    tripName: tripName,
+                    groupName: groupName,
+                    createdBy: userId,
+                    startDate: startDate,
+                    destinations: destinations,
+                    routeData: routeData  // Include calculated routes
+                };
+
+                const response = await fetch('/api/trips/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -438,36 +472,18 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    const plan = result.trip_plan;
-                    let message = `✅ Trip created successfully!\n\n`;
-                    
-                    if (plan.num_ways) {
-                        message += `📊 There are ${plan.num_ways} different ways to visit all cities\n\n`;
-                    }
-                    
-                    if (plan.total_cost) {
-                        message += `💰 Optimal route total cost: $${plan.total_cost.toFixed(2)}\n\n`;
-                    }
-                    
-                    message += `🗺️ Optimal path:\n`;
-                    plan.path_details.forEach(d => {
-                        message += `${d.order}. ${d.city}, ${d.country}\n`;
-                    });
-                    
-                    alert(message);
-                    
                     // Redirect to view trip
                     window.location.href = `/trip/${result.trip_id}?userId=${userId}`;
                 } else {
-                    alert('Error: ' + result.error);
+                    alert('Error saving trip: ' + result.error);
                 }
             } catch (err) {
                 console.error(err);
-                alert('Error creating trip');
+                alert('Error saving trip to database');
             }
         }
 
-        // Initialize map when page loads
         window.onload = initMap;
     </script>
 </body>
+</html>

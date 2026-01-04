@@ -39,8 +39,10 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), "static")
 app.mount("/uploads", StaticFiles(directory="uploads"), "uploads")
 
 # Include chatbot router
-app.include_router(chatbot_router)  
-trip_planner = TripPlanner(aviation_api_key="89c8982a15561c1791b509b85a4a9c6b")
+app.include_router(chatbot_router) 
+ 
+config = get_config()
+trip_planner = TripPlanner(aviation_api_key=config.aviation_api_key)
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -52,6 +54,9 @@ async def handle_http_exception(req: Request, exc: StarletteHTTPException):
         status_code=exc.status_code
     )
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return RedirectResponse(url="/static/images/logo.png")
 
 # AUTHENTICATION ROUTES
 @app.get("/", response_class=HTMLResponse)
@@ -468,7 +473,7 @@ async def receipt_upload_page(
 async def plan_solo_trip_page(req: Request, userId: str):
     return templates.TemplateResponse(
         req, "plan_trip.html", 
-        {"userId": userId, "isSolo": True, "groupName": None, "google_maps_key": get_config().google_maps_api_key}
+        {"userId": userId, "isSolo": True, "groupName": None}
     )
 
 
@@ -476,7 +481,7 @@ async def plan_solo_trip_page(req: Request, userId: str):
 async def plan_group_trip_page(req: Request, userId: str, groupName: str):
     return templates.TemplateResponse(
         req, "plan_trip.html",
-        {"userId": userId, "isSolo": False, "groupName": groupName, "google_maps_key": get_config().google_maps_api_key}
+        {"userId": userId, "isSolo": False, "groupName": groupName}
     )
 
 
@@ -583,7 +588,6 @@ async def create_trip(req: Request, cur: Annotated[Cur, Depends(get_db)]):
         print(f"Error creating trip: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
-
 @app.get("/api/trips")
 async def get_trips(userId: str, groupName: Optional[str] = None, 
                    cur: Annotated[Cur, Depends(get_db)] = None):
@@ -649,6 +653,126 @@ async def get_trips(userId: str, groupName: Optional[str] = None,
         
     except Exception as e:
         print(f"Error fetching trips: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+@app.post("/api/trips/calculate")
+async def calculate_trip(req: Request):
+    """
+    Calculate all possible routes using Hamiltonian path algorithm
+    """
+    data = await req.json()
+    
+    trip_name = data.get("tripName")
+    start_date_str = data.get("startDate")
+    destinations = data.get("destinations", [])
+    
+    if not trip_name or not start_date_str or len(destinations) < 2:
+        return JSONResponse(
+            {"error": "Trip name, start date, and at least 2 destinations required"}, 
+            status_code=400
+        )
+    
+    try:
+        start_date = datetime.fromisoformat(start_date_str)
+        
+        # Calculate all possible routes
+        result = trip_planner.calculate_trip_plan(destinations, start_date)
+        
+        if result.get("error"):
+            return JSONResponse(result, status_code=400)
+        
+        return JSONResponse(result)
+        
+    except Exception as e:
+        print(f"Error calculating trip: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+    
+@app.post("/api/trips/save")
+async def save_trip(req: Request, cur: Annotated[Cur, Depends(get_db)]):
+    """
+    Save a calculated trip to the database
+    """
+    data = await req.json()
+    
+    trip_name = data.get("tripName")
+    group_name = data.get("groupName")
+    created_by = data.get("createdBy")
+    start_date_str = data.get("startDate")
+    destinations = data.get("destinations", [])
+    route_data = data.get("routeData", {})
+    
+    if not trip_name or not created_by or len(destinations) < 2:
+        return JSONResponse(
+            {"error": "Trip name, creator, and at least 2 destinations required"}, 
+            status_code=400
+        )
+    
+    try:
+        start_date = datetime.fromisoformat(start_date_str)
+        
+        # 1. Create trip
+        await cur.execute(
+            queries.CREATE_TRIP,
+            (trip_name, group_name, created_by, "economy")  # Default travel class
+        )
+        trip_id = cur.lastrowid
+        
+        # 2. Get the optimal path from route_data
+        optimal_path_indices = route_data.get("paths", [{}])[0].get("path_indices", list(range(len(destinations))))
+        
+        # 3. Add destinations in optimal order
+        destination_ids = []
+        for visit_order, city_idx in enumerate(optimal_path_indices):
+            dest = destinations[city_idx]
+            
+            # Calculate dates
+            cumulative_days = sum(destinations[optimal_path_indices[i]]["days"] for i in range(visit_order))
+            arrival_date = start_date + timedelta(days=cumulative_days)
+            departure_date = arrival_date + timedelta(days=dest["days"])
+            
+            await cur.execute(
+                queries.ADD_DESTINATION,
+                (
+                    trip_id,
+                    dest["city"],
+                    dest["country"],
+                    dest.get("airport"),
+                    dest.get("latitude"),
+                    dest.get("longitude"),
+                    visit_order + 1,
+                    arrival_date,
+                    departure_date
+                )
+            )
+            destination_ids.append(cur.lastrowid)
+        
+        # 4. Save pathway calculation
+        await cur.execute(
+            queries.SAVE_PATHWAY,
+            (
+                trip_id,
+                json.dumps(optimal_path_indices),
+                None,  # no cost
+                route_data.get("num_paths", 1),
+                True  # is_optimal
+            )
+        )
+        
+        await cur._connection.commit()
+        
+        return JSONResponse({
+            "success": True,
+            "trip_id": trip_id,
+            "message": f"Trip '{trip_name}' saved successfully!"
+        })
+        
+    except Exception as e:
+        await cur._connection.rollback()
+        print(f"Error saving trip: {e}")
         import traceback
         traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)

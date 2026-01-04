@@ -14,7 +14,7 @@ create table if not exists User (
 );
 
 create table if not exists `Group` (
-    group_name varchar(200) primary key, -- GLOBAL PRIMARY KEY
+    group_name varchar(200) primary key,
     created_by varchar(100) not null,
     duration varchar(100),
     created_at timestamp not null default current_timestamp,
@@ -32,11 +32,10 @@ create table if not exists GroupMember (
 create table if not exists Event (
     group_name varchar(200) not null,
     event_name varchar(200) not null,
-    created_by varchar(100) not null, -- Metadata only
+    created_by varchar(100) not null,
     description text,
     duration varchar(100),
     created_at timestamp not null default current_timestamp,
-    -- PK is Group + Event Name
     primary key (group_name, event_name),
     foreign key (group_name) references `Group`(group_name) on update cascade on delete cascade
 );
@@ -45,7 +44,7 @@ create table if not exists Transaction (
     transaction_id int primary key auto_increment,
     group_name varchar(200) not null,
     event_name varchar(200) not null,
-    created_by varchar(100) not null, -- Metadata
+    created_by varchar(100) not null,
     owed_by varchar(100) not null,
     owed_to varchar(100) not null,
     amount decimal(10, 2) not null,
@@ -53,7 +52,6 @@ create table if not exists Transaction (
     timestamp timestamp not null default current_timestamp,
     is_paid boolean not null default false,
     receipt_path varchar(500),
-    -- Link to Event
     foreign key (group_name, event_name) references Event(group_name, event_name) on update cascade on delete cascade,
     foreign key (owed_by) references User(username) on update cascade on delete cascade,
     foreign key (owed_to) references User(username) on update cascade on delete cascade
@@ -73,7 +71,7 @@ create table if not exists PaidTransaction (
     foreign key (owed_to) references User(username) on update cascade on delete cascade
 );
 
--- Triggers (Debt calculation)
+-- Triggers
 DROP TRIGGER IF EXISTS after_transaction_insert;
 DROP TRIGGER IF EXISTS after_transaction_paid;
 
@@ -106,36 +104,15 @@ end; //
 
 delimiter ;
 
--- Chat tables
-create table if not exists ChatMessage (
-    message_id int primary key auto_increment,
-    username varchar(100) not null,
-    sender enum('user', 'bot') not null,
-    message text not null,
-    timestamp timestamp not null default current_timestamp,
-    foreign key (username) references User(username) on update cascade on delete cascade
-);
-
-create table if not exists ChatExtracted (
-    extract_id int primary key auto_increment,
-    username varchar(100) not null,
-    category enum('place', 'split_rule', 'reminder', 'task', 'amount', 'event') not null,
-    value text not null,
-    context text,
-    timestamp timestamp not null default current_timestamp,
-    is_used boolean not null default false,
-    foreign key (username) references User(username) on update cascade on delete cascade
-);
-
 -- Trip planning tables
 create table if not exists Trip (
     trip_id int primary key auto_increment,
     trip_name varchar(200) not null,
-    group_name varchar(200),  -- NULL for solo trips
+    group_name varchar(200),
     created_by varchar(100) not null,
     travel_class enum('economy', 'business', 'first') default 'economy',
     created_at timestamp not null default current_timestamp,
-    foreign key (group_name) references `Group`(group_name) on update cascade on delete cascade,
+    foreign key (group_name) references `Group`(group_name) on update cascade on delete set null,
     foreign key (created_by) references User(username) on update cascade on delete cascade
 );
 
@@ -147,7 +124,7 @@ create table if not exists TripDestination (
     airport_code varchar(10),
     latitude decimal(10, 8),
     longitude decimal(11, 8),
-    visit_order int not null,  -- Order of visit (1, 2, 3, ...)
+    visit_order int not null,
     arrival_date datetime,
     departure_date datetime,
     foreign key (trip_id) references Trip(trip_id) on update cascade on delete cascade
@@ -168,15 +145,47 @@ create table if not exists TripRoute (
     foreign key (to_destination_id) references TripDestination(destination_id) on update cascade on delete cascade
 );
 
--- Store the Hamilton path calculation results
 create table if not exists TripPathways (
     pathway_id int primary key auto_increment,
     trip_id int not null,
-    path_sequence text not null,  -- JSON array of destination_ids
+    path_sequence text not null,
     total_cost decimal(10, 2),
-    total_ways int,  -- Number of ways to complete this path
+    total_ways int,
     is_optimal boolean default false,
     foreign key (trip_id) references Trip(trip_id) on update cascade on delete cascade
+);
+
+-- Chatbot State Management (FIXED - no duplicates)
+CREATE TABLE IF NOT EXISTS ChatbotState (
+    user_id VARCHAR(100) PRIMARY KEY,
+    state VARCHAR(50) NOT NULL DEFAULT 'menu',
+    state_data JSON,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(username) ON DELETE CASCADE
+);
+
+-- Chat Message History (FIXED - single definition)
+CREATE TABLE IF NOT EXISTS ChatMessage (
+    message_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL,
+    sender ENUM('user', 'bot') NOT NULL,
+    message TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(username) ON DELETE CASCADE,
+    INDEX idx_user_timestamp (user_id, timestamp)
+);
+
+-- Extracted Information Storage
+CREATE TABLE IF NOT EXISTS ExtractedInfo (
+    info_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(100) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    value TEXT NOT NULL,
+    context TEXT,
+    used BOOLEAN DEFAULT 0,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES User(username) ON DELETE CASCADE,
+    INDEX idx_user_category (user_id, category)
 );
 
 commit;

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Groups - Expense Tracker</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', path='images/logo.png') }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -185,9 +186,12 @@
 </head>
 <body>
     <div class="navbar">
-        <h1>👥 Your Groups</h1>
-        <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
+    <div style="display: flex; align-items: center;">
+        <img src="{{ url_for('static', path='images/logo.png') }}" alt="Logo" style="height: 35px; margin-right: 10px;">
+        <h1>Your Groups</h1>
     </div>
+    <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
+</div>
 
     <div class="container">
         {% if groups %}
