@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ trip.trip_name }} - Trip Details</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', path='images/logo.png') }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -30,7 +29,7 @@
         .container {
             max-width: 1200px;
             margin: 2rem auto;
-            padding: 0 2rem;
+            padding: 0 2rem 4rem;
         }
         .card {
             background: white;
@@ -69,56 +68,98 @@
             border-radius: 8px;
             margin-bottom: 1rem;
             border-left: 4px solid #667eea;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        .destination-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
         }
         .destination-card h3 {
             color: #667eea;
             margin-bottom: 0.5rem;
         }
-        .route-arrow {
-            text-align: center;
-            color: #667eea;
-            font-size: 2rem;
-            margin: 0.5rem 0;
+        .route-section {
+            background: #e3f2fd;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            border-left: 4px solid #2196f3;
         }
-        .cost-badge {
-            display: inline-block;
-            background: #28a745;
+        .route-section h4 {
+            color: #2196f3;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .flight-option {
+            background: white;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 0.75rem;
+            border-left: 3px solid #28a745;
+        }
+        .flight-option.daytime {
+            border-left-color: #ffc107;
+            background: #fffef0;
+        }
+        .flight-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .airline-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 1.05rem;
+        }
+        .flight-number {
+            background: #667eea;
             color: white;
             padding: 0.25rem 0.75rem;
             border-radius: 15px;
-            font-size: 0.9rem;
-            margin-left: 1rem;
+            font-size: 0.85rem;
         }
-        .events-section {
-            display: none;
-            margin-top: 1rem;
-            padding: 1rem;
-            background: white;
-            border-radius: 5px;
-            border: 1px solid #ddd;
+        .time-info {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 0.75rem;
         }
-        .events-section.active {
-            display: block;
+        .time-box {
+            text-align: center;
         }
-        .add-event-btn {
-            padding: 0.5rem 1rem;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+        .time-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+        }
+        .time-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+        }
+        .arrow {
+            font-size: 1.5rem;
+            color: #667eea;
+        }
+        .daytime-badge {
+            display: inline-block;
+            background: #ffc107;
+            color: #333;
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
         }
         .pathway-info {
             background: #e3f2fd;
             padding: 1.5rem;
             border-radius: 8px;
             border-left: 4px solid #2196f3;
+        }
+        .empty-flights {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            background: #f8f9fa;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -170,114 +211,208 @@
         <div class="card">
             <div class="pathway-info">
                 <h3 style="color: #2196f3; margin-bottom: 0.5rem;">🧮 Route Analysis</h3>
-                <p>Based on the Hamiltonian path algorithm, there are <strong>{{ pathway.total_ways }}</strong> different ways to visit all destinations. The route shown below is the optimal path with the minimum total cost.</p>
+                <p>Based on the Hamiltonian path algorithm, there are <strong>{{ pathway.total_ways }}</strong> different ways to visit all destinations. The route shown below is the optimal path.</p>
             </div>
         </div>
         {% endif %}
 
         <div class="card">
             <h2>🗺️ Itinerary</h2>
-            {% for dest in destinations %}
-                <div class="destination-card" onclick="toggleEvents('dest-{{ dest.destination_id }}')">
-                    <h3>Stop {{ dest.visit_order }}: {{ dest.city }}, {{ dest.country }}</h3>
-                    {% if dest.airport_code %}
-                    <p style="color: #666;">Airport: {{ dest.airport_code }}</p>
-                    {% endif %}
-                    {% if dest.arrival_date %}
-                    <p style="color: #666; margin-top: 0.5rem;">
-                        📅 Arrival: {{ dest.arrival_date.strftime('%B %d, %Y at %I:%M %p') }}
-                    </p>
-                    {% endif %}
-                    {% if dest.departure_date %}
-                    <p style="color: #666;">
-                        📅 Departure: {{ dest.departure_date.strftime('%B %d, %Y at %I:%M %p') }}
-                    </p>
-                    {% endif %}
-                    <p style="margin-top: 1rem; color: #667eea; font-size: 0.9rem;">
-                        Click to add events and expenses for this destination ▼
-                    </p>
-                    
-                    <div class="events-section" id="dest-{{ dest.destination_id }}">
-                        <h4>Events in {{ dest.city }}</h4>
-                        <p style="color: #666; margin: 1rem 0;">Add events and expenses for this destination (Coming soon)</p>
-                        <button class="add-event-btn" onclick="addEventForDestination('{{ trip.group_name or '' }}', '{{ dest.city }}', event)">
-                            ➕ Add Event
-                        </button>
-                    </div>
-                </div>
-
-                {% if not loop.last %}
-                    {% set route = routes|selectattr('from_city', 'equalto', dest.city)|first %}
-                    {% if route %}
-                    <div class="route-arrow">
-                        ✈️ 
-                        {% if route.flight_cost %}
-                        <span class="cost-badge">${{ route.flight_cost|round(2) }}</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-        </div>
-
-        {% if routes %}
-        <div class="card">
-            <h2>🛫 Flight Routes</h2>
-            <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse;">
-                    <thead>
-                        <tr style="background: #f8f9fa; text-align: left;">
-                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">From</th>
-                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">To</th>
-                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">Cost</th>
-                            <th style="padding: 1rem; border-bottom: 2px solid #ddd;">Airline</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for route in routes %}
-                        <tr>
-                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
-                                {{ route.from_city }} ({{ route.from_airport }})
-                            </td>
-                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
-                                {{ route.to_city }} ({{ route.to_airport }})
-                            </td>
-                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
-                                {% if route.flight_cost %}
-                                ${{ route.flight_cost|round(2) }}
-                                {% else %}
-                                TBD
-                                {% endif %}
-                            </td>
-                            <td style="padding: 1rem; border-bottom: 1px solid #eee;">
-                                {{ route.airline or 'TBD' }}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div id="tripItinerary">
+                <p style="text-align: center; padding: 2rem; color: #666;">Loading flight details...</p>
             </div>
         </div>
-        {% endif %}
     </div>
 
     <script>
-        function toggleEvents(id) {
-            event.stopPropagation();
-            const section = document.getElementById(id);
-            section.classList.toggle('active');
-        }
+        const tripId = {{ trip.trip_id }};
+        const userId = "{{ userId }}";
 
-        function addEventForDestination(groupName, city, e) {
-            e.stopPropagation();
-            // Redirect to groups page or add event interface
-            if (groupName) {
-                alert(`Adding event for ${city} in group ${groupName}`);
-                // Implement event creation logic here
-            } else {
-                alert(`This is a solo trip. Event tracking for solo trips coming soon!`);
+        async function loadFlightDetails() {
+            try {
+                const response = await fetch(`/api/trips?userId=${userId}`);
+                const trips = await response.json();
+                
+                const currentTrip = trips.find(t => t.trip_id === tripId);
+                if (!currentTrip) {
+                    document.getElementById('tripItinerary').innerHTML = 
+                        '<p style="color: #e74c3c;">Trip not found</p>';
+                    return;
+                }
+
+                const destinations = currentTrip.destinations || [];
+                const pathwayData = currentTrip.optimal_pathway;
+                
+                // Parse the path sequence
+                let pathIndices = [];
+                if (pathwayData && pathwayData.path_sequence) {
+                    try {
+                        pathIndices = JSON.parse(pathwayData.path_sequence);
+                    } catch (e) {
+                        console.error('Error parsing path sequence:', e);
+                    }
+                }
+
+                // If no path sequence, use order as-is
+                if (pathIndices.length === 0) {
+                    pathIndices = destinations.map((_, idx) => idx);
+                }
+
+                let html = '';
+
+                for (let i = 0; i < pathIndices.length; i++) {
+                    const destIdx = pathIndices[i];
+                    const dest = destinations[destIdx];
+                    
+                    html += `
+                        <div class="destination-card">
+                            <h3>Stop ${i + 1}: ${dest.city}, ${dest.country}</h3>
+                            ${dest.airport_code ? `<p style="color: #666;">Airport: ${dest.airport_code}</p>` : ''}
+                            ${dest.arrival_date ? `
+                                <p style="color: #666; margin-top: 0.5rem;">
+                                    📅 Arrival: ${new Date(dest.arrival_date).toLocaleDateString('en-US', { 
+                                        year: 'numeric', month: 'long', day: 'numeric' 
+                                    })}
+                                </p>
+                            ` : ''}
+                            ${dest.departure_date ? `
+                                <p style="color: #666;">
+                                    📅 Departure: ${new Date(dest.departure_date).toLocaleDateString('en-US', { 
+                                        year: 'numeric', month: 'long', day: 'numeric' 
+                                    })}
+                                </p>
+                            ` : ''}
+                        </div>
+                    `;
+
+                    // Add flight information - including return flight to first city
+                    const isLastCity = (i === pathIndices.length - 1);
+                    const nextDestIdx = isLastCity ? pathIndices[0] : pathIndices[i + 1];
+                    const nextDest = destinations[nextDestIdx];
+                    
+                    html += `
+                        <div class="route-section">
+                            <h4>✈️ Flight from ${dest.city} to ${nextDest.city} ${isLastCity ? '(Return Flight)' : ''}</h4>
+                            <div id="flights-${i}" style="margin-top: 1rem;">
+                                <p style="color: #666;">Loading flight options...</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                document.getElementById('tripItinerary').innerHTML = html;
+
+                // Now fetch and display actual flight options
+                await loadFlightOptions(destinations, pathIndices);
+
+            } catch (err) {
+                console.error('Error loading trip details:', err);
+                document.getElementById('tripItinerary').innerHTML = 
+                    '<p style="color: #e74c3c;">Error loading trip details</p>';
             }
         }
+
+        async function loadFlightOptions(destinations, pathIndices) {
+            // Load flights including the return flight
+            for (let i = 0; i < pathIndices.length; i++) {
+                const destIdx = pathIndices[i];
+                const isLastCity = (i === pathIndices.length - 1);
+                const nextDestIdx = isLastCity ? pathIndices[0] : pathIndices[i + 1];
+                const dest = destinations[destIdx];
+                const nextDest = destinations[nextDestIdx];
+
+                try {
+                    // Make API call to get flight options
+                    const response = await fetch('/api/trips/calculate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tripName: 'temp',
+                            startDate: dest.departure_date || new Date().toISOString().split('T')[0],
+                            destinations: [
+                                {
+                                    city: dest.city,
+                                    country: dest.country,
+                                    airport: dest.airport_code,
+                                    days: 1
+                                },
+                                {
+                                    city: nextDest.city,
+                                    country: nextDest.country,
+                                    airport: nextDest.airport_code,
+                                    days: 1
+                                }
+                            ]
+                        })
+                    });
+
+                    const result = await response.json();
+                    
+                    const flightsDiv = document.getElementById(`flights-${i}`);
+                    
+                    if (result.paths && result.paths.length > 0 && result.paths[0].flights.length > 0) {
+                        const flightOptions = result.paths[0].flights[0].options || [];
+                        
+                        if (flightOptions.length === 0) {
+                            flightsDiv.innerHTML = `
+                                <div class="empty-flights">
+                                    <p>No direct flights found between these airports.</p>
+                                    <p style="font-size: 0.9rem; margin-top: 0.5rem; color: #999;">
+                                        You may need connecting flights.
+                                    </p>
+                                </div>
+                            `;
+                        } else {
+                            let flightsHtml = '';
+                            flightOptions.forEach(flight => {
+                                const isDaytime = flight.is_daytime;
+                                flightsHtml += `
+                                    <div class="flight-option ${isDaytime ? 'daytime' : ''}">
+                                        <div class="flight-header">
+                                            <span class="airline-name">
+                                                ${flight.airline}
+                                                ${isDaytime ? '<span class="daytime-badge">🌞 Daytime</span>' : ''}
+                                            </span>
+                                            <span class="flight-number">${flight.flight_number || 'N/A'}</span>
+                                        </div>
+                                        <div class="time-info">
+                                            <div class="time-box">
+                                                <div class="time-label">Departure</div>
+                                                <div class="time-value">${flight.departure_time_str}</div>
+                                                <div class="time-label" style="margin-top: 0.25rem;">${flight.from_airport}</div>
+                                            </div>
+                                            <div class="arrow">→</div>
+                                            <div class="time-box">
+                                                <div class="time-label">Arrival</div>
+                                                <div class="time-value">${flight.arrival_time_str}</div>
+                                                <div class="time-label" style="margin-top: 0.25rem;">${flight.to_airport}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            });
+                            flightsDiv.innerHTML = flightsHtml;
+                        }
+                    } else {
+                        flightsDiv.innerHTML = `
+                            <div class="empty-flights">
+                                <p>Unable to fetch flight information at this time.</p>
+                            </div>
+                        `;
+                    }
+                } catch (err) {
+                    console.error(`Error loading flights for segment ${i}:`, err);
+                    document.getElementById(`flights-${i}`).innerHTML = `
+                        <div class="empty-flights">
+                            <p style="color: #e74c3c;">Error loading flights</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Load flight details when page loads
+        loadFlightDetails();
     </script>
 </body>
 </html>

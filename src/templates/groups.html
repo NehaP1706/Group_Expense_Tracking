@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Groups - Expense Tracker</title>
-    <link rel="icon" type="image/png" href="{{ url_for('static', path='images/logo.png') }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -26,427 +25,575 @@
             padding: 0.5rem 1rem;
             background: rgba(255,255,255,0.2);
             border-radius: 5px;
+            margin-left: 0.5rem;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 2rem auto;
             padding: 0 2rem;
         }
-        .group {
+        .group-card {
             background: white;
             padding: 2rem;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 2rem;
         }
-        .group h2 {
-            color: #667eea;
-            margin-bottom: 1rem;
-        }
-        .group-info {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-radius: 5px;
-            margin-bottom: 1rem;
-        }
-        .members-list {
+        .group-header {
             display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin: 1rem 0;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 1rem;
         }
-        .member-tag {
-            background: #667eea;
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
-            font-size: 0.9rem;
-        }
-        .event {
-            border: 1px solid #ddd;
-            padding: 1rem;
-            border-radius: 5px;
-            margin: 1rem 0;
-            background: #fff;
-        }
-        .event h4 {
+        .group-header h2 {
             color: #333;
-            margin-bottom: 0.75rem;
         }
-        .transaction {
-            padding: 0.75rem;
-            background: #f8f9fa;
-            border-left: 4px solid #ffc107;
-            border-radius: 3px;
-            margin-bottom: 0.5rem;
-        }
-        .transaction.paid {
-            text-decoration: line-through;
-            opacity: 0.6;
-            border-left-color: #28a745;
-        }
-        button {
-            padding: 0.5rem 1rem;
+        .btn {
+            padding: 0.75rem 1.5rem;
             background: #667eea;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
-            margin: 0.5rem 0.5rem 0 0;
+            text-decoration: none;
+            display: inline-block;
         }
-        button:hover {
+        .btn:hover {
             background: #5568d3;
         }
-        .add-event-form {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 5px;
-            margin-top: 1rem;
+        .btn-secondary {
+            background: #6c757d;
         }
-        .add-event-form h3 {
-            color: #333;
-            margin-bottom: 1rem;
+        .btn-secondary:hover {
+            background: #5a6268;
         }
-        .form-group {
-            margin-bottom: 1rem;
+        .section {
+            margin-top: 2rem;
         }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.25rem;
+        .section h3 {
             color: #555;
-            font-weight: 500;
+            margin-bottom: 1rem;
         }
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.5rem;
-            border: 1px solid #ddd;
+        .member-list, .event-list, .trip-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+        .member-item, .event-item, .trip-item {
+            background: #f8f9fa;
+            padding: 1rem;
             border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .trip-item {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .trip-item:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .event-details {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .transaction-item {
+            background: #fff3cd;
+            padding: 0.75rem;
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+            margin: 0.5rem 0;
+        }
+        .transaction-item.paid {
+            background: #d4edda;
+            border-left-color: #28a745;
         }
         .empty-state {
             text-align: center;
             color: #666;
-            padding: 3rem;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 5px;
         }
-        .trips-section {
-            background: #e8f4f8;
-            padding: 1.5rem;
-            border-radius: 8px;
-            margin-top: 1.5rem;
-            border-left: 4px solid #2196f3;
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            overflow-y: auto;
         }
-        .trips-section h3 {
-            color: #2196f3;
-            margin-bottom: 1rem;
+        .modal.active {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            justify-content: center;
         }
-        .trip-card {
+        .modal-content {
             background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #667eea;
+        }
+        .modal-header h2 {
+            color: #333;
+            margin: 0;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: auto;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #555;
+            font-weight: 600;
+        }
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .transaction-entry {
+            background: #f8f9fa;
             padding: 1rem;
             border-radius: 5px;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        .transaction-entry h4 {
+            color: #667eea;
             margin-bottom: 0.75rem;
-            cursor: pointer;
-            transition: all 0.3s;
-            border: 1px solid #b3d9f2;
         }
-        .trip-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            transform: translateY(-2px);
-        }
-        .trip-card h4 {
-            color: #2196f3;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .trip-badge {
-            display: inline-block;
-            background: #2196f3;
+        .remove-transaction-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #e74c3c;
             color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 15px;
+            border: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            cursor: pointer;
             font-size: 0.8rem;
+            width: auto;
         }
-        .trip-details {
-            color: #666;
+        .btn-small {
+            padding: 0.5rem 1rem;
             font-size: 0.9rem;
+            width: auto;
+            display: inline-block;
             margin-top: 0.5rem;
-        }
-        .no-trips {
-            color: #666;
-            font-style: italic;
-            text-align: center;
-            padding: 1rem;
         }
     </style>
 </head>
 <body>
     <div class="navbar">
-    <div style="display: flex; align-items: center;">
-        <img src="{{ url_for('static', path='images/logo.png') }}" alt="Logo" style="height: 35px; margin-right: 10px;">
-        <h1>Your Groups</h1>
+        <h1>👥 Your Groups</h1>
+        <div>
+            <a href="/make-group?userId={{ userId }}">➕ Create Group</a>
+            <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
+        </div>
     </div>
-    <a href="/dashboard?userId={{ userId }}">← Back to Dashboard</a>
-</div>
 
     <div class="container">
         {% if groups %}
             {% for group in groups %}
-            <div class="group">
-                <h2>{{ group.group_name }}</h2>
-                
-                <div class="group-info">
-                    <p><strong>Group Name:</strong> {{ group.group_name }}</p>
-                    <p><strong>Created By:</strong> {{ group.creator_first_name }} {{ group.creator_last_name }} ({{ group.created_by }})</p>
-                    {% if group.duration %}
-                    <p><strong>Duration:</strong> {{ group.duration }}</p>
-                    {% endif %}
+            <div class="group-card">
+                <div class="group-header">
+                    <div>
+                        <h2>{{ group.group_name }}</h2>
+                        <p style="color: #666; margin-top: 0.25rem;">
+                            Created by {{ group.creator_first_name }} {{ group.creator_last_name }}
+                            {% if group.duration %}• Duration: {{ group.duration }}{% endif %}
+                        </p>
+                    </div>
+                    <div>
+                        <a href="/plan-group-trip?userId={{ userId }}&groupName={{ group.group_name }}" class="btn">
+                            ✈️ Plan Trip
+                        </a>
+                        <button class="btn btn-secondary" onclick="openEventModal('{{ group.group_name }}')">
+                            ➕ Add Event
+                        </button>
+                    </div>
                 </div>
 
-                <div>
-                    <strong>Members:</strong>
-                    <div class="members-list">
+                <!-- Members Section -->
+                <div class="section">
+                    <h3>👤 Members ({{ group.members|length }})</h3>
+                    <div class="member-list">
                         {% for member in group.members %}
-                        <span class="member-tag">{{ member.first_name }} {{ member.last_name }}</span>
+                        <div class="member-item">
+                            <strong>{{ member.first_name }} {{ member.last_name }}</strong>
+                            <div style="font-size: 0.85rem; color: #666;">@{{ member.username }}</div>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
 
                 <!-- Trips Section -->
-                <div class="trips-section">
+                <div class="section">
                     <h3>✈️ Group Trips</h3>
-                    <div id="trips-{{ group.group_name }}-{{ group.created_by }}">
-                        <p class="no-trips">Loading trips...</p>
+                    <div class="trip-list" id="trips-{{ group.group_name }}">
+                        <div class="empty-state" style="grid-column: 1/-1;">
+                            <p>Loading trips...</p>
+                        </div>
                     </div>
                 </div>
 
-                {% if group.events %}
-                <h3 style="margin-top: 1.5rem; color: #333;">Events</h3>
-                {% for event in group.events %}
-                <div class="event">
-                    <h4>{{ event.event_name }}</h4>
-                    <p style="color: #666;">{{ event.description }} | {{ event.duration }}</p>
-                    
-                    {% if event.transactions %}
-                    <div style="margin-top: 1rem;">
-                        {% for txn in event.transactions %}
-                        <div class="transaction {% if txn.is_paid %}paid{% endif %}">
-                            ₹{{ txn.amount }} owed by {{ txn.owed_by_first }} {{ txn.owed_by_last }} 
-                            to {{ txn.owed_to_first }} {{ txn.owed_to_last }} 
-                            for {{ txn.reason }}
-                            <br>
-                            <em style="font-size: 0.9rem; color: #666;">
-                                {{ txn.timestamp.strftime('%Y-%m-%d %H:%M') }}
-                            </em>
+                <!-- Events Section -->
+                <div class="section">
+                    <h3>📅 Events ({{ group.events|length }})</h3>
+                    {% if group.events %}
+                    <div class="event-list">
+                        {% for event in group.events %}
+                        <div class="event-item">
+                            <strong>{{ event.event_name }}</strong>
+                            {% if event.description %}
+                            <div class="event-details">{{ event.description }}</div>
+                            {% endif %}
+                            {% if event.duration %}
+                            <div class="event-details">⏱️ {{ event.duration }}</div>
+                            {% endif %}
+                            <div class="event-details">
+                                💰 {{ event.transactions|length }} transaction(s)
+                            </div>
                             
-                            {% if not txn.is_paid and (txn.owed_by == userId or txn.owed_to == userId) %}
-                            <button onclick="markAsPaid('{{ group.group_name }}', '{{ group.created_by }}', '{{ event.event_name }}', '{{ txn.timestamp }}', '{{ txn.owed_by }}', '{{ txn.owed_to }}')">
-                                Mark as Paid
-                            </button>
+                            {% if event.transactions %}
+                            <div style="margin-top: 1rem;">
+                                {% for txn in event.transactions %}
+                                <div class="transaction-item {% if txn.is_paid %}paid{% endif %}">
+                                    <strong>${{ txn.amount }}</strong>:
+                                    {{ txn.owed_by }} → {{ txn.owed_to }}
+                                    <div style="font-size: 0.85rem; margin-top: 0.25rem;">
+                                        {{ txn.reason }}
+                                    </div>
+                                    {% if not txn.is_paid %}
+                                    <button style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; font-size: 0.85rem;" 
+                                            class="btn" 
+                                            onclick="markPaid('{{ group.group_name }}', '{{ event.event_name }}', '{{ txn.timestamp }}', '{{ txn.owed_by }}', '{{ txn.owed_to }}')">
+                                        Mark as Paid
+                                    </button>
+                                    {% else %}
+                                    <div style="color: #28a745; font-size: 0.85rem; margin-top: 0.25rem;">
+                                        ✓ Paid
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
                             {% endif %}
                         </div>
                         {% endfor %}
                     </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <p>No events yet. Click "Add Event" to get started!</p>
+                    </div>
                     {% endif %}
                 </div>
-                {% endfor %}
-                {% endif %}
-
-                <div class="add-event-form">
-                    <h3>Add New Event</h3>
-                    <form onsubmit="submitEvent(event, '{{ group.group_name }}', '{{ group.created_by }}')">
-                        <div class="form-group">
-                            <label>Event Name</label>
-                            <input type="text" id="eventName-{{ group.group_name }}-{{ group.created_by }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Description</label>
-                            <textarea id="description-{{ group.group_name }}-{{ group.created_by }}"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Amount</label>
-                            <input type="number" step="0.01" id="amount-{{ group.group_name }}-{{ group.created_by }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Owed By (Username)</label>
-                            <input type="text" id="owedBy-{{ group.group_name }}-{{ group.created_by }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Owed To (Username)</label>
-                            <input type="text" id="owedTo-{{ group.group_name }}-{{ group.created_by }}" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Reason</label>
-                            <input type="text" id="reason-{{ group.group_name }}-{{ group.created_by }}" required>
-                        </div>
-                        <button type="submit">Add Event</button>
-                    </form>
-                </div>
-
-                {% if group.created_by == userId %}
-                <button onclick="editMembers('{{ group.group_name }}', '{{ group.created_by }}', '{{ group.members|map(attribute='username')|join(',') }}')">
-                    Edit Members
-                </button>
-                {% endif %}
-                
-                <button onclick="window.location.href='/plan-group-trip?userId={{ userId }}&groupName={{ group.group_name }}'" 
-                        style="background: #28a745; margin-left: 0.5rem;">
-                    ✈️ Plan Group Trip
-                </button>
             </div>
             {% endfor %}
         {% else %}
-        <div class="empty-state">
-            <h2>No groups found</h2>
-            <p>Create a group to get started!</p>
-            <button onclick="window.location.href='/make-group?userId={{ userId }}'">
-                Create Group
-            </button>
+        <div class="group-card">
+            <div class="empty-state">
+                <h3>No Groups Yet</h3>
+                <p style="margin-top: 1rem;">Create your first group to start tracking expenses!</p>
+                <a href="/make-group?userId={{ userId }}" class="btn" style="margin-top: 1rem;">
+                    ➕ Create Group
+                </a>
+            </div>
         </div>
         {% endif %}
     </div>
 
+    <!-- Add Event Modal -->
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Event</h2>
+                <button class="close-btn" onclick="closeEventModal()">×</button>
+            </div>
+            
+            <form id="eventForm" onsubmit="submitEvent(event)">
+                <div class="form-group">
+                    <label>Event Name *</label>
+                    <input type="text" id="eventName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="eventDescription" placeholder="Optional description"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Duration</label>
+                    <input type="text" id="eventDuration" placeholder="e.g., 3 days, 1 week">
+                </div>
+                
+                <h3 style="margin: 1.5rem 0 1rem; color: #333;">Transactions</h3>
+                <div id="transactionsList"></div>
+                
+                <button type="button" class="btn btn-secondary btn-small" onclick="addTransaction()">
+                    + Add Transaction
+                </button>
+                
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeEventModal()">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn" style="flex: 1;">
+                        Create Event
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         const userId = "{{ userId }}";
+        let currentGroupName = null;
+        let transactionCount = 0;
 
-        // Load trips for each group when page loads
-        async function loadGroupTrips() {
-            const groups = document.querySelectorAll('[id^="trips-"]');
+        function openEventModal(groupName) {
+            currentGroupName = groupName;
+            document.getElementById('eventModal').classList.add('active');
+            document.getElementById('eventForm').reset();
+            document.getElementById('transactionsList').innerHTML = '';
+            transactionCount = 0;
+            addTransaction(); // Add one transaction by default
+        }
+
+        function closeEventModal() {
+            document.getElementById('eventModal').classList.remove('active');
+            currentGroupName = null;
+        }
+
+        function addTransaction() {
+            const id = transactionCount++;
+            const transactionsList = document.getElementById('transactionsList');
             
-            for (const tripsDiv of groups) {
-                const groupId = tripsDiv.id.replace('trips-', '');
-                const [groupName, createdBy] = groupId.split('-');
+            const transactionHtml = `
+                <div class="transaction-entry" id="transaction-${id}">
+                    <button type="button" class="remove-transaction-btn" onclick="removeTransaction(${id})">×</button>
+                    <h4>Transaction ${id + 1}</h4>
+                    
+                    <div class="form-group">
+                        <label>Who owes money?</label>
+                        <input type="text" id="owedBy-${id}" placeholder="Username" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Who is owed money?</label>
+                        <input type="text" id="owedTo-${id}" placeholder="Username" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Amount</label>
+                        <input type="number" id="amount-${id}" step="0.01" min="0" placeholder="0.00" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Reason</label>
+                        <input type="text" id="reason-${id}" placeholder="What is this payment for?">
+                    </div>
+                </div>
+            `;
+            
+            transactionsList.insertAdjacentHTML('beforeend', transactionHtml);
+        }
+
+        function removeTransaction(id) {
+            const element = document.getElementById(`transaction-${id}`);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        async function submitEvent(e) {
+            e.preventDefault();
+            
+            const eventName = document.getElementById('eventName').value;
+            const description = document.getElementById('eventDescription').value;
+            const duration = document.getElementById('eventDuration').value;
+            
+            // Collect all transactions
+            const transactions = [];
+            const transactionEntries = document.querySelectorAll('.transaction-entry');
+            
+            for (const entry of transactionEntries) {
+                const id = entry.id.split('-')[1];
+                const owedBy = document.getElementById(`owedBy-${id}`).value;
+                const owedTo = document.getElementById(`owedTo-${id}`).value;
+                const amount = parseFloat(document.getElementById(`amount-${id}`).value);
+                const reason = document.getElementById(`reason-${id}`).value;
                 
+                if (owedBy && owedTo && amount) {
+                    transactions.push({
+                        owedBy: owedBy.trim(),
+                        owedTo: owedTo.trim(),
+                        amount: amount,
+                        reason: reason.trim()
+                    });
+                }
+            }
+            
+            if (transactions.length === 0) {
+                alert('Please add at least one transaction');
+                return;
+            }
+            
+            const event = {
+                eventName: eventName.trim(),
+                description: description.trim(),
+                duration: duration.trim(),
+                transactions: transactions
+            };
+            
+            try {
+                const response = await fetch('/api/groups/addEvent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        groupName: currentGroupName,
+                        event: event,
+                        createdBy: userId
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('Event added successfully!');
+                    closeEventModal();
+                    location.reload();
+                } else {
+                    alert('Error: ' + result.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Error adding event');
+            }
+        }
+
+        // Load trips for each group
+        async function loadGroupTrips() {
+            const groups = {{ groups | tojson }};
+            
+            for (const group of groups) {
                 try {
-                    // Fetch trips for this group (userId needed for backend query)
-                    const response = await fetch(`/api/trips?userId=${userId}&groupName=${encodeURIComponent(groupName)}`);
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
-                    }
-                    
+                    const response = await fetch(`/api/trips?userId=${userId}&groupName=${encodeURIComponent(group.group_name)}`);
                     const trips = await response.json();
                     
-                    // Handle error responses
-                    if (trips.error) {
-                        throw new Error(trips.error);
-                    }
+                    const tripsList = document.getElementById(`trips-${group.group_name}`);
                     
                     if (!trips || trips.length === 0) {
-                        tripsDiv.innerHTML = '<p class="no-trips">No trips planned yet. Click "Plan Group Trip" to create one!</p>';
+                        tripsList.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>No trips yet. Click "Plan Trip" to get started!</p></div>';
                         continue;
                     }
 
-                    // Display trips
-                    tripsDiv.innerHTML = trips.map(trip => {
+                    tripsList.innerHTML = trips.map(trip => {
                         const destCount = trip.destinations ? trip.destinations.length : 0;
                         const totalCost = trip.optimal_pathway?.total_cost;
                         
                         return `
-                            <div class="trip-card" onclick="window.location.href='/trip/${trip.trip_id}?userId=${userId}'">
-                                <h4>
-                                    ${trip.trip_name}
-                                    <span class="trip-badge">View Details →</span>
-                                </h4>
-                                <div class="trip-details">
-                                    📍 ${destCount} destination${destCount !== 1 ? 's' : ''} • 
-                                    ${trip.travel_class.charAt(0).toUpperCase() + trip.travel_class.slice(1)} class
-                                    ${totalCost ? ` • 💰 ${totalCost.toFixed(2)}` : ''}
+                            <div class="trip-item" onclick="window.location.href='/trip/${trip.trip_id}?userId=${userId}'">
+                                <strong style="color: #667eea;">${trip.trip_name}</strong>
+                                <div style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;">
+                                    📍 ${destCount} destination${destCount !== 1 ? 's' : ''}
+                                </div>
+                                <div style="font-size: 0.85rem; color: #666;">
+                                    🎫 ${trip.travel_class.charAt(0).toUpperCase() + trip.travel_class.slice(1)}
+                                </div>
+                                ${totalCost ? `<div style="color: #28a745; font-weight: 600; margin-top: 0.5rem;">💰 ${totalCost.toFixed(2)}</div>` : ''}
+                                <div style="color: #667eea; font-size: 0.8rem; margin-top: 0.5rem;">
+                                    Click to view details →
                                 </div>
                             </div>
                         `;
                     }).join('');
                 } catch (err) {
-                    console.error(`Error loading trips for group ${groupName}:`, err);
-                    tripsDiv.innerHTML = '<p class="no-trips" style="color: #e74c3c;">Error loading trips</p>';
+                    console.error(`Error loading trips for ${group.group_name}:`, err);
+                    document.getElementById(`trips-${group.group_name}`).innerHTML = 
+                        '<div class="empty-state" style="grid-column: 1/-1;"><p style="color: #e74c3c;">Error loading trips</p></div>';
                 }
             }
         }
 
         // Load trips on page load
-        window.addEventListener('DOMContentLoaded', loadGroupTrips);
+        if ({{ 'true' if groups else 'false' }}) {
+            loadGroupTrips();
+        }
 
-        async function submitEvent(e, groupName, createdBy) {
-            e.preventDefault();
-            
-            const formId = `${groupName}-${createdBy}`;
-            const event = {
-                eventName: document.getElementById(`eventName-${formId}`).value,
-                description: document.getElementById(`description-${formId}`).value,
-                duration: "N/A",
-                transactions: [{
-                    owedBy: document.getElementById(`owedBy-${formId}`).value,
-                    owedTo: document.getElementById(`owedTo-${formId}`).value,
-                    reason: document.getElementById(`reason-${formId}`).value,
-                    amount: parseFloat(document.getElementById(`amount-${formId}`).value),
-                    timestamp: new Date().toISOString(),
-                    isPaid: false
-                }]
-            };
+        async function markPaid(groupName, eventName, timestamp, owedBy, owedTo) {
+            if (!confirm('Mark this transaction as paid?')) return;
 
             try {
-                const res = await fetch(`/api/groups/addEvent`, {
+                const response = await fetch('/api/markTransactionPaid', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         groupName: groupName,
-                        createdBy: createdBy,
-                        event: event 
+                        eventName: eventName,
+                        timestamp: timestamp,
+                        owedBy: owedBy,
+                        owedTo: owedTo
                     })
                 });
 
-                const result = await res.json(); 
-
-                if (res.ok) {
-                    alert("✅ Event added!");
+                const result = await response.json();
+                if (response.ok) {
+                    alert('Transaction marked as paid!');
                     location.reload();
                 } else {
-                    alert("❌ " + (result.error || "Failed to add event."));
+                    alert('Error: ' + result.error);
                 }
             } catch (err) {
                 console.error(err);
-                alert("❌ Error while submitting event.");
+                alert('Error marking transaction as paid');
             }
         }
 
-        async function markAsPaid(groupName, createdBy, eventName, timestamp, owedBy, owedTo) {
-            const url = `/receipt_upload?groupName=${encodeURIComponent(groupName)}&createdBy=${encodeURIComponent(createdBy)}&eventName=${encodeURIComponent(eventName)}&timestamp=${encodeURIComponent(timestamp)}&owedBy=${owedBy}&owedTo=${owedTo}`;
-            window.open(url, '_blank', 'width=500,height=600');
-        }
-
-        async function editMembers(groupName, createdBy, currentMembers) {
-            const memberInput = prompt("Enter comma-separated usernames:", currentMembers);
-            if (!memberInput) return;
-
-            const newMembers = memberInput.split(",").map(m => m.trim()).filter(m => m.length > 0);
-
-            try {
-                const res = await fetch(`/api/groups/updateMembers`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        groupName: groupName,
-                        createdBy: createdBy,
-                        members: newMembers 
-                    })
-                });
-
-                if (res.ok) {
-                    alert("✅ Group members updated!");
-                    location.reload();
-                } else {
-                    alert("❌ Failed to update members.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("❌ Error while updating members.");
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('eventModal');
+            if (event.target === modal) {
+                closeEventModal();
             }
         }
     </script>
-    {% include "chatbot_widget.html" %}
 </body>
 </html>

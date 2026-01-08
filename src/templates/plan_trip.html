@@ -172,7 +172,7 @@
         <div class="card">
             <h2>🗺️ Select Destinations</h2>
             <div class="info-box">
-                <strong>How to use:</strong> Click the search icon on the map or click anywhere to add destinations. First city = start, last city = end.
+                <strong>How to use:</strong> Click the search icon on the map or click anywhere to add destinations. First city = starting point (you'll return here at the end).
             </div>
             
             <div id="map"></div>
@@ -194,7 +194,7 @@
             </div>
 
             <div class="warning-box">
-                <strong>⚠️ Important:</strong> The first city you add will be your starting point, and the last city will be your ending point. All routes will go from first → last city.
+                <strong>⚠️ Round Trip Journey:</strong> This is a round-trip. You'll start from the first city, visit all destinations, and return to where you started.
             </div>
 
             <h3 style="margin: 1.5rem 0 1rem; color: #333;">Selected Destinations</h3>
@@ -207,7 +207,7 @@
                 <p style="font-size: 0.9rem; color: #666; margin-top: 0.5rem;">This may take a minute...</p>
             </div>
 
-            <button onclick="calculateTrip()">🚀 Find All Possible Routes</button>
+            <button onclick="calculateTrip()">🚀 Find All Possible Round-Trip Routes</button>
         </div>
     </div>
 
@@ -351,7 +351,7 @@
             list.innerHTML = destinations.map((dest, idx) => `
                 <div class="destination-item">
                     <button class="remove-btn" onclick="removeDestination(${idx})">✕</button>
-                    <h4>${idx + 1}. ${dest.city}, ${dest.country} ${idx === 0 ? '(Start)' : idx === destinations.length - 1 ? '(End)' : ''}</h4>
+                    <h4>${idx + 1}. ${dest.city}, ${dest.country} ${idx === 0 ? '(Start/End)' : ''}</h4>
                     <p style="color: #666; font-size: 0.9rem;">
                         ${dest.latitude.toFixed(4)}, ${dest.longitude.toFixed(4)}
                     </p>
@@ -433,7 +433,7 @@
                     const numPaths = result.num_paths;
                     
                     if (numPaths === 0) {
-                        alert('❌ No valid routes found. There may not be direct flights between some cities.');
+                        alert('❌ No valid round-trip routes found. There may not be direct flights between some cities or back to the starting city.');
                         return;
                     }
                     

@@ -184,7 +184,7 @@
             <div>
                 {% for txn in transactions %}
                 <div class="transaction-item paid">
-                    <strong>{{ txn.currency }} {{ txn.amount }}</strong> — 
+                    <strong>{{ txn.currency }} {{ txn.amount }}</strong> – 
                     {{ txn.owed_by }} paid {{ txn.owed_to }} for "{{ txn.reason }}"
                     <br>
                     <em style="color: #666; font-size: 0.9rem;">
